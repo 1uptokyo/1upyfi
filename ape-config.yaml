@@ -1,0 +1,8 @@
+name: 1upyfi
+plugins:
+  - name: vyper
+  - name: foundry
+ethereum:
+  default_network: mainnet-fork
+  mainnet_fork:
+    default_provider: foundry
