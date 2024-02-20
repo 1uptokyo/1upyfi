@@ -6,7 +6,7 @@ interface Gauge:
     def harvest() -> uint256: nonpayable
 
 interface Registry:
-    def ygauge_map(_ygauge: address) -> address: view
+    def gauge_map(_ygauge: address) -> address: view
 
 interface Redeemer:
     def redeem(_account: address, _receiver: address, _amount: uint256, _data: Bytes[256]): payable
@@ -117,69 +117,53 @@ def gauge_balance(_gauge: address, _account: address) -> uint256:
     return self._unpack(self.packed_balances[_gauge][_account])[0]
 
 @external
-def report(_ygauge: address, _rewards: uint256, _account: address, _change: int256):
+def report(_ygauge: address, _from: address, _to: address, _amount: uint256, _rewards: uint256):
+    assert _from != empty(address) or _to != empty(address) or _rewards > 0
+
     supply: uint256 = 0
     integral: uint256 = 0
     supply, integral = self._unpack(self.packed_supply[msg.sender])
 
-    if _change > 0:
+    if _from == empty(address):
         # deposit into gauge, make sure it is registered
-        assert registry.ygauge_map(_ygauge) == msg.sender
+        assert registry.gauge_map(_ygauge) == msg.sender
 
     if _rewards > 0 and supply > 0:
         integral += _rewards * PRECISION / supply
         assert reward.transferFrom(msg.sender, self, _rewards, default_return_value=True)
 
-    self.packed_supply[msg.sender] = self._pack(supply, integral)
-    if _account == empty(address) or _change == 0:
+    if _from == empty(address) and _to == empty(address):
+        self.packed_supply[msg.sender] = self._pack(supply, integral)
         return
+    assert _amount > 0
     
-    balance: uint256 = 0
+    account_balance: uint256 = 0
     account_integral: uint256 = 0
-    balance, account_integral = self._unpack(self.packed_balances[msg.sender][_account])
-    pending: uint256 = (integral - account_integral) * balance / PRECISION
-    if pending > 0:
-        self.pending_rewards[_account] += pending
+    pending: uint256 = 0
 
-    if _change < 0:
-        change: uint256 = convert(-_change, uint256)
-        supply -= change
-        balance -= change
+    if _from == empty(address):
+        # mint
+        supply += _amount
     else:
-        change: uint256 = convert(_change, uint256)
-        supply += change
-        balance += change
+        account_balance, account_integral = self._unpack(self.packed_balances[msg.sender][_from])
+        pending = (integral - account_integral) * account_balance / PRECISION
+        if pending > 0:
+            self.pending_rewards[_from] += pending
+        self.packed_balances[msg.sender][_from] = self._pack(account_balance - _amount, integral)
+
+    if _to == empty(address):
+        # burn
+        supply -= _amount
+    else:
+        account_balance, account_integral = self._unpack(self.packed_balances[msg.sender][_to])
+        pending = (integral - account_integral) * account_balance / PRECISION
+        if pending > 0:
+            self.pending_rewards[_to] += pending
+        self.packed_balances[msg.sender][_to] = self._pack(account_balance + _amount, integral)
 
     if supply > 0:
         assert supply > PRECISION / 1000
-
     self.packed_supply[msg.sender] = self._pack(supply, integral)
-    self.packed_balances[msg.sender][_account] = self._pack(balance, integral)
-
-@external
-def report_transfer(_from: address, _to: address, _amount: uint256):
-    supply: uint256 = 0
-    integral: uint256 = 0
-    supply, integral = self._unpack(self.packed_supply[msg.sender])
-    assert supply > 0
-
-    pending: uint256 = 0
-    balance: uint256 = 0
-    account_integral: uint256 = 0
-
-    balance, account_integral = self._unpack(self.packed_balances[msg.sender][_from])
-    pending = (integral - account_integral) * balance / PRECISION
-    if pending > 0:
-        self.pending_rewards[_from] += pending
-    balance -= _amount
-    self.packed_balances[msg.sender][_from] = self._pack(balance, integral)
-
-    balance, account_integral = self._unpack(self.packed_balances[msg.sender][_to])
-    pending = (integral - account_integral) * balance / PRECISION
-    if pending > 0:
-        self.pending_rewards[_to] += pending
-    balance += _amount
-    self.packed_balances[msg.sender][_to] = self._pack(balance, integral)
 
 @external
 @view

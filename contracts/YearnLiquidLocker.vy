@@ -9,11 +9,11 @@ implements: ERC20Detailed
 interface Proxy:
     def modify_lock(_amount: uint256, _unlock_time: uint256): nonpayable
 
-interface YearnLocker:
+interface YearnVotingEscrow:
     def locked(_account: address) -> uint256: view
 
 token: public(immutable(ERC20))
-locker: immutable(YearnLocker)
+voting_escrow: immutable(YearnVotingEscrow)
 proxy: public(immutable(Proxy))
 
 totalSupply: public(uint256)
@@ -22,7 +22,7 @@ allowance: public(HashMap[address, HashMap[address, uint256]])
 
 decimals: public(constant(uint8)) = 18
 name: public(constant(String[14])) = "1UP Locked YFI"
-symbol: public(constant(String[6])) = "1upYFI"
+symbol: public(constant(String[5])) = "upYFI"
 
 WEEK: constant(uint256) = 7 * 24 * 60 * 60
 LOCK_TIME: constant(uint256) = 500 * WEEK
@@ -38,9 +38,9 @@ event Approval:
     _value: uint256
 
 @external
-def __init__(_token: address, _locker: address, _proxy: address):
+def __init__(_token: address, _voting_escrow: address, _proxy: address):
     token = ERC20(_token)
-    locker = YearnLocker(_locker)
+    voting_escrow = YearnVotingEscrow(_voting_escrow)
     proxy = Proxy(_proxy)
     log Transfer(empty(address), msg.sender, 0)
 
@@ -52,7 +52,7 @@ def deposit(_amount: uint256, _receiver: address = msg.sender):
 
 @external
 def mint(_receiver: address = msg.sender) -> uint256:
-    excess: uint256 = locker.locked(proxy.address) - self.totalSupply
+    excess: uint256 = voting_escrow.locked(proxy.address) - self.totalSupply
     self._mint(excess, _receiver)
     return excess
 

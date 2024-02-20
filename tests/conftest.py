@@ -19,13 +19,13 @@ def ychad(accounts):
     return accounts[YCHAD]
 
 @fixture
-def yfi():
+def locking_token():
     return Contract(YFI)
 
 @fixture
-def veyfi():
+def voting_escrow():
     return Contract(VEYFI)
 
 @fixture
-def proxy(project, deployer, veyfi):
-    return project.Proxy.deploy(veyfi, sender=deployer)
+def proxy(project, deployer, voting_escrow):
+    return project.Proxy.deploy(voting_escrow, sender=deployer)

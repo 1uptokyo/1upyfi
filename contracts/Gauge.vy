@@ -9,8 +9,7 @@ interface YearnGauge:
     def getReward(_account: address): nonpayable
 
 interface Collector:
-    def report(_ygauge: address, _rewards: uint256, _account: address, _change: int256): nonpayable
-    def report_transfer(_from: address, _to: address, _amount: uint256): nonpayable
+    def report(_ygauge: address, _from: address, _to: address, _amount: uint256, _rewards: uint256): nonpayable
     def gauge_supply(_gauge: address) -> uint256: view
     def gauge_balance(_gauge: address, _account: address) -> uint256: view
 
@@ -68,7 +67,7 @@ def transfer(_to: address, _value: uint256) -> bool:
     assert _to != empty(address) and _to != self
     assert _value > 0
 
-    collector.report_transfer(msg.sender, _to, _value)
+    collector.report(asset, msg.sender, _to, _value, 0)
     log Transfer(msg.sender, _to, _value)
     return True
 
@@ -81,7 +80,7 @@ def transferFrom(_from: address, _to: address, _value: uint256) -> bool:
     self.allowance[_from][msg.sender] = allowance
     log Approval(_from, msg.sender, allowance)
 
-    collector.report_transfer(_from, _to, _value)
+    collector.report(asset, _from, _to, _value, 0)
     log Transfer(_from, _to, _value)
     return True
 
@@ -176,7 +175,7 @@ def harvest() -> uint256:
 @internal
 def _deposit(_assets: uint256, _receiver: address):
     rewards: uint256 = self._harvest()
-    collector.report(asset, rewards, _receiver, convert(_assets, int256))
+    collector.report(asset, empty(address), _receiver, _assets, rewards)
     assert ERC20(asset).transferFrom(msg.sender, proxy, _assets, default_return_value=True)
     log Deposit(msg.sender, _receiver, _assets, _assets)
     log Transfer(empty(address), _receiver, _assets)
@@ -188,7 +187,7 @@ def _withdraw(_assets: uint256, _receiver: address, _owner: address):
         self.allowance[_owner][msg.sender] = allowance
         log Approval(_owner, msg.sender, allowance)
     rewards: uint256 = self._harvest()
-    collector.report(asset, rewards, _owner, -convert(_assets, int256))
+    collector.report(asset, _owner, empty(address), _assets, rewards)
     assert ERC20(asset).transferFrom(proxy, msg.sender, _assets, default_return_value=True)
     log Withdraw(msg.sender, _receiver, _owner, _assets, _assets)
     log Transfer(_owner, empty(address), _assets)
