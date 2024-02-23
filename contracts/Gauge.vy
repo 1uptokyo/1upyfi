@@ -5,6 +5,10 @@ from vyper.interfaces import ERC4626
 implements: ERC20
 implements: ERC4626
 
+interface ERC20Detailed:
+    def name() -> String[124]: view
+    def symbol() -> String[60]: view
+
 interface YearnGauge:
     def getReward(_account: address): nonpayable
 
@@ -17,6 +21,7 @@ asset: public(immutable(address))
 proxy: public(immutable(address))
 reward: public(immutable(ERC20))
 collector: public(immutable(Collector))
+decimals: public(constant(uint8)) = 18
 
 allowance: public(HashMap[address, HashMap[address, uint256]])
 
@@ -43,6 +48,8 @@ event Withdraw:
     _assets: uint256
     _shares: uint256
 
+PREFIX: constant(String[3]) = "1up"
+
 @external
 def __init__(_asset: address, _proxy: address, _reward: address, _collector: address):
     asset = _asset
@@ -51,6 +58,20 @@ def __init__(_asset: address, _proxy: address, _reward: address, _collector: add
     collector = Collector(_collector)
     assert reward.approve(_collector, max_value(uint256), default_return_value=True)
     log Transfer(empty(address), msg.sender, 0)
+
+@external
+@view
+def name() -> String[128]:
+    vault: address = ERC4626(asset).asset()
+    name: String[124] = ERC20Detailed(vault).name()
+    return concat(PREFIX, " ", name)
+
+@external
+@view
+def symbol() -> String[64]:
+    vault: address = ERC4626(asset).asset()
+    symbol: String[60] = ERC20Detailed(vault).symbol()
+    return concat(PREFIX, "-", symbol)
 
 @external
 @view

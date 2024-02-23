@@ -33,9 +33,9 @@ def isValidSignature(_hash: bytes32, _signature: Bytes[128]) -> bytes4:
 
 @external
 @payable
-def call(_target: address, _data: Bytes[MAX_SIZE]) -> Bytes[MAX_SIZE]:
+def call(_target: address, _data: Bytes[MAX_SIZE]):
     assert self.operators[msg.sender]
-    return raw_call(_target, _data, max_outsize=MAX_SIZE, value=msg.value)
+    raw_call(_target, _data, value=msg.value)
 
 @external
 def modify_lock(_amount: uint256, _unlock_time: uint256):

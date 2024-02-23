@@ -11,14 +11,15 @@ interface Registry:
 interface Redeemer:
     def redeem(_account: address, _receiver: address, _amount: uint256, _data: Bytes[256]): payable
 
-reward: public(immutable(ERC20))
+reward_token: public(immutable(ERC20))
 registry: public(immutable(Registry))
-redeemer: public(address)
+management: public(address)
+pending_management: public(address)
+redeemer: public(Redeemer)
 packed_supply: public(HashMap[address, uint256])
 packed_balances: public(HashMap[address, HashMap[address, uint256]])
 pending_rewards: public(HashMap[address, uint256])
 packed_fees: public(uint256)
-owner: public(address)
 
 PRECISION: constant(uint256) = 10**18
 MASK: constant(uint256) = 2**128 - 1
@@ -31,11 +32,11 @@ REDEEM_SELL_FEE_IDX: constant(uint256) = 2 # claim with redeem, without ETH
 REDEEM_FEE_IDX: constant(uint256)      = 3 # claim with redeem, with ETH
 
 @external
-def __init__(_redeemer: address, _reward: address, _registry: address):
-    reward = ERC20(_reward)
+def __init__(_reward_token: address, _registry: address, _redeemer: address):
+    reward_token = ERC20(_reward_token)
     registry = Registry(_registry)
+    self.management = msg.sender
     self.redeemer = _redeemer
-    self.owner = msg.sender
 
 @external
 @view
@@ -43,10 +44,10 @@ def claimable(_account: address, _gauges: DynArray[address, 32]) -> uint256:
     amount: uint256 = self.pending_rewards[_account]
     for gauge in _gauges:
         integral: uint256 = self._unpack(self.packed_supply[gauge])[1]
-        balance: uint256 = 0
+        account_balance: uint256 = 0
         account_integral: uint256 = 0
-        balance, account_integral = self._unpack(self.packed_balances[gauge][_account])
-        amount += (integral - account_integral) * balance / PRECISION
+        account_balance, account_integral = self._unpack(self.packed_balances[gauge][_account])
+        amount += (integral - account_integral) * account_balance / PRECISION
     return amount
 
 @external
@@ -64,23 +65,25 @@ def claim(_gauges: DynArray[address, 32], _receiver: address = msg.sender, _rede
             amount += (integral - account_integral) * balance / PRECISION
             self.packed_balances[gauge][msg.sender] = self._pack(balance, integral)
 
+    redeem: bool = len(_redeem_data) > 0 or msg.value > 0
     fee: uint256 = FEE_IDX
-    if len(_redeem_data) > 0:
+    if redeem:
         if msg.value > 0:
+            # redeem by supplying ETH
             fee = REDEEM_FEE_IDX
         else:
+            # redeem by partially selling the rewards
             fee = REDEEM_SELL_FEE_IDX
     fee = self._fee(fee)
     if fee > 0:
         fee = amount * fee / FEE_DENOMINATOR
         amount -= fee
 
-    if len(_redeem_data) > 0:
-        redeemer: address = self.redeemer
-        assert reward.transfer(redeemer, amount, default_return_value=True)
-        Redeemer(redeemer).redeem(msg.sender, _receiver, amount, _redeem_data, value=msg.value)
+    if redeem:
+        assert self.redeemer.address != empty(address)
+        self.redeemer.redeem(msg.sender, _receiver, amount, _redeem_data, value=msg.value)
     else:
-        assert reward.transfer(_receiver, amount, default_return_value=True)
+        assert reward_token.transfer(_receiver, amount, default_return_value=True)
 
 @external
 def harvest(_gauges: DynArray[address, 32], _receiver: address = msg.sender) -> uint256:
@@ -145,6 +148,7 @@ def report(_ygauge: address, _from: address, _to: address, _amount: uint256, _re
         # mint
         supply += _amount
     else:
+        # transfer - update account rewards
         account_balance, account_integral = self._unpack(self.packed_balances[msg.sender][_from])
         pending = (integral - account_integral) * account_balance / PRECISION
         if pending > 0:
@@ -155,6 +159,7 @@ def report(_ygauge: address, _from: address, _to: address, _amount: uint256, _re
         # burn
         supply -= _amount
     else:
+        # transfer - update account rewards
         account_balance, account_integral = self._unpack(self.packed_balances[msg.sender][_to])
         pending = (integral - account_integral) * account_balance / PRECISION
         if pending > 0:
@@ -183,7 +188,7 @@ def _fee(_idx: uint256) -> uint256:
 
 @external
 def set_fee(_idx: uint256, _fee: uint256):
-    assert msg.sender == self.owner
+    assert msg.sender == self.management
     assert _idx < 4
     assert _fee <= FEE_DENOMINATOR
     packed: uint256 = self.packed_fees
@@ -191,6 +196,20 @@ def set_fee(_idx: uint256, _fee: uint256):
     packed &= ~(FEE_MASK << sh) # zero out old fee
     packed |= _fee << sh # write new fee
     self.packed_fees = packed
+
+@external
+def set_redeemer(_redeemer: address):
+    assert msg.sender == self.management
+
+    previous: address = self.redeemer.address
+    if previous != empty(address):
+        # retract previous allowance
+        assert reward_token.approve(previous, 0, default_return_value=True)
+    if _redeemer != empty(address):
+        # set new allowance
+        assert reward_token.approve(_redeemer, max_value(uint256), default_return_value=True)
+
+    self.redeemer = Redeemer(_redeemer)
 
 @internal
 @pure

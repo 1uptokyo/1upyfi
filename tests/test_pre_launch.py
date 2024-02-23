@@ -4,7 +4,7 @@ from _constants import *
 
 @fixture
 def liquid_locker(project, deployer, yfi, veyfi, proxy):
-    locker = project.YearnLiquidLocker.deploy(yfi, veyfi, proxy, sender=deployer)
+    locker = project.LiquidLocker.deploy(yfi, veyfi, proxy, sender=deployer)
     data = yfi.approve.encode_input(veyfi, MAX_VALUE)
     proxy.call(yfi, data, sender=deployer)
     proxy.set_operator(locker, True, sender=deployer)

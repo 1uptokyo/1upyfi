@@ -14,7 +14,16 @@ collector: public(immutable(address))
 
 management: public(address)
 pending_management: public(address)
-gauge_implementation: public(address)
+gauge_blueprint: public(address)
+
+event SetGaugeBlueprint:
+    blueprint: address
+
+event PendingManagement:
+    management: address
+
+event SetManagement:
+    management: address
 
 @external
 def __init__(_yearn_registry: address, _reward: address, _proxy: address, _registry: address, _collector: address):
@@ -29,11 +38,11 @@ def __init__(_yearn_registry: address, _reward: address, _proxy: address, _regis
 @external
 def deploy_gauge(_ygauge: address) -> address:
     assert yearn_registry.registered(_ygauge)
-    implementation: address = self.gauge_implementation
-    assert implementation != empty(address)
+    blueprint: address = self.gauge_blueprint
+    assert blueprint != empty(address)
 
     gauge: address = create_from_blueprint(
-        implementation,
+        blueprint,
         _ygauge,
         proxy,
         reward,
@@ -42,3 +51,34 @@ def deploy_gauge(_ygauge: address) -> address:
     )
     registry.register(gauge)
     return gauge
+
+@external
+def set_gauge_blueprint(_blueprint: address):
+    assert msg.sender == self.management
+    assert _blueprint != empty(address)
+    self.gauge_blueprint = _blueprint
+    log SetGaugeBlueprint(_blueprint)
+
+@external
+def set_management(_management: address):
+    """
+    @notice 
+        Set the pending management address.
+        Needs to be accepted by that account separately to transfer management over
+    @param _management New pending management address
+    """
+    assert msg.sender == self.management
+    self.pending_management = _management
+    log PendingManagement(_management)
+
+@external
+def accept_management():
+    """
+    @notice 
+        Accept management role.
+        Can only be called by account previously marked as pending management by current management
+    """
+    assert msg.sender == self.pending_management
+    self.pending_management = empty(address)
+    self.management = msg.sender
+    log SetManagement(msg.sender)
