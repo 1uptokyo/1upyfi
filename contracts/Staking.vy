@@ -7,8 +7,14 @@ implements: ERC4626
 
 asset: public(immutable(address))
 totalSupply: public(uint256)
-balanceOf: public(HashMap[address, uint256])
+previous_packed_balances: public(HashMap[address, uint256]) # week | time | balance
+packed_balances: public(HashMap[address, uint256]) # week | time | balance
+packed_streams: public(HashMap[address, uint256]) # time | total | claimed
 allowance: public(HashMap[address, HashMap[address, uint256]])
+
+decimals: public(constant(uint8)) = 18
+name: public(constant(String[21])) = "Staked 1UP Locked YFI"
+symbol: public(constant(String[6])) = "supYFI"
 
 event Transfer:
     _from: indexed(address)
@@ -33,17 +39,29 @@ event Withdraw:
     _assets: uint256
     _shares: uint256
 
+SMALL_MASK: constant(uint256) = 2**32 - 1
+BIG_MASK: constant(uint256) = 2**112 - 1
+DAY_LENGTH: constant(uint256) = 24 * 60 * 60
+WEEK_LENGTH: constant(uint256) = 7 * DAY_LENGTH
+INCREMENT: constant(bool) = True
+DECREMENT: constant(bool) = False
+
 @external
 def __init__(_asset: address):
     asset = _asset
+
+@external
+@view
+def balanceOf(_account: address) -> uint256:
+    return self.packed_balances[_account] & BIG_MASK
 
 @external
 def transfer(_to: address, _value: uint256) -> bool:
     assert _to != empty(address) and _to != self
     assert _value > 0
 
-    self.balanceOf[msg.sender] -= _value
-    self.balanceOf[_to] += _value
+    self._update_balance(_value, msg.sender, DECREMENT)
+    self._update_balance(_value, _to, INCREMENT)
     log Transfer(msg.sender, _to, _value)
     return True
 
@@ -56,8 +74,8 @@ def transferFrom(_from: address, _to: address, _value: uint256) -> bool:
     self.allowance[_from][msg.sender] = allowance
     log Approval(_from, msg.sender, allowance)
 
-    self.balanceOf[_from] -= _value
-    self.balanceOf[_to] += _value
+    self._update_balance(_value, _from, DECREMENT)
+    self._update_balance(_value, _to, INCREMENT)
     log Transfer(_from, _to, _value)
     return True
 
@@ -117,7 +135,7 @@ def mint(_shares: uint256, _receiver: address = msg.sender) -> uint256:
 @view
 @external
 def maxWithdraw(_owner: address) -> uint256:
-    return self.balanceOf[_owner]
+    return self._withdrawable(_owner)
 
 @view
 @external
@@ -132,7 +150,7 @@ def withdraw(_assets: uint256, _receiver: address = msg.sender, _owner: address 
 @view
 @external
 def maxRedeem(_owner: address) -> uint256:
-    return self.balanceOf[_owner]
+    return self._withdrawable(_owner)
 
 @view
 @external
@@ -144,14 +162,38 @@ def redeem(_shares: uint256, _receiver: address = msg.sender, _owner: address = 
     self._withdraw(_shares, _receiver, _owner)
     return _shares
 
+@external
+def unstake(_assets: uint256):
+    self.totalSupply -= _assets
+    self._update_balance(_assets, msg.sender, DECREMENT)
+
+    time: uint256 = 0
+    total: uint256 = 0
+    claimed: uint256 = 0
+    time, total, claimed = self._unpack(self.packed_streams[msg.sender])
+    self.packed_streams[msg.sender] = self._pack(block.timestamp, total - claimed + _assets, 0)
+    log Transfer(msg.sender, empty(address), _assets)
+
 @internal
 def _deposit(_assets: uint256, _receiver: address):
     self.totalSupply += _assets
-    self.balanceOf[_receiver] += _assets
+    self._update_balance(_assets, _receiver, INCREMENT)
 
     assert ERC20(asset).transferFrom(msg.sender, self, _assets, default_return_value=True)
     log Deposit(msg.sender, _receiver, _assets, _assets)
     log Transfer(empty(address), _receiver, _assets)
+
+@internal
+@view
+def _withdrawable(_account: address) -> uint256:
+    time: uint256 = 0
+    total: uint256 = 0
+    claimed: uint256 = 0
+    time, total, claimed = self._unpack(self.packed_streams[_account])
+    if time == 0:
+        return 0
+    time = min(block.timestamp - time, WEEK_LENGTH)
+    return total * time / WEEK_LENGTH - claimed
 
 @internal
 def _withdraw(_assets: uint256, _receiver: address, _owner: address):
@@ -160,9 +202,54 @@ def _withdraw(_assets: uint256, _receiver: address, _owner: address):
         self.allowance[_owner][msg.sender] = allowance
         log Approval(_owner, msg.sender, allowance)
 
-    self.totalSupply -= _assets
-    self.balanceOf[_owner] -= _assets
+    time: uint256 = 0
+    total: uint256 = 0
+    claimed: uint256 = 0
+    time, total, claimed = self._unpack(self.packed_streams[_owner])
+    assert time > 0
 
-    assert ERC20(asset).transferFrom(self, msg.sender, _assets, default_return_value=True)
-    log Withdraw(msg.sender, _receiver, _owner, _assets, _assets)
-    log Transfer(_owner, empty(address), _assets)
+    claimed += _assets
+    claimable: uint256 = min(block.timestamp - time, WEEK_LENGTH)
+    claimable = total * claimable / WEEK_LENGTH
+    assert claimed <= claimable
+
+    if claimed < total:
+        self.packed_streams[_owner] = self._pack(time, total, claimed)
+    else:
+        self.packed_streams[_owner] = 0
+
+    assert ERC20(asset).transfer(_receiver, _assets, default_return_value=True)
+    log Withdraw(_owner, _receiver, _owner, _assets, _assets)
+
+@internal
+def _update_balance(_amount: uint256, _account: address, _increment: bool):
+    current_week: uint256 = block.timestamp / WEEK_LENGTH
+    week: uint256 = 0
+    time: uint256 = 0
+    balance: uint256 = 0
+    week, time, balance = self._unpack(self.packed_balances[_account])
+
+    if _increment == INCREMENT:
+        dt: uint256 = 0
+        if time > 0:
+            dt = block.timestamp - time
+        time = block.timestamp - balance * dt / (balance + _amount)
+        balance += _amount
+    else:
+        balance -= _amount
+
+    if current_week > week:
+        self.previous_packed_balances[_account] = self.packed_balances[_account]
+
+    self.packed_balances[_account] = self._pack(current_week, time, balance)
+
+@internal
+@pure
+def _pack(_a: uint256, _b: uint256, _c: uint256) -> uint256:
+    assert _a <= SMALL_MASK and _b <= BIG_MASK and _c <= BIG_MASK
+    return (_a << 224) | (_b << 112) | _c
+
+@internal
+@pure
+def _unpack(_packed: uint256) -> (uint256, uint256, uint256):
+    return _packed >> 224, (_packed >> 112) & BIG_MASK, _packed & BIG_MASK
