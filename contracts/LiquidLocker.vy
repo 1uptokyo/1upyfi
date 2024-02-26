@@ -24,6 +24,7 @@ decimals: public(constant(uint8)) = 18
 name: public(constant(String[14])) = "1UP Locked YFI"
 symbol: public(constant(String[5])) = "upYFI"
 
+SCALE: constant(uint256) = 69_420
 WEEK: constant(uint256) = 7 * 24 * 60 * 60
 LOCK_TIME: constant(uint256) = 500 * WEEK
 
@@ -46,13 +47,13 @@ def __init__(_token: address, _voting_escrow: address, _proxy: address):
 
 @external
 def deposit(_amount: uint256, _receiver: address = msg.sender):
-    self._mint(_amount, _receiver)
+    self._mint(_amount * SCALE, _receiver)
     assert token.transferFrom(msg.sender, proxy.address, _amount, default_return_value=True)
     proxy.modify_lock(_amount, block.timestamp + LOCK_TIME)
 
 @external
 def mint(_receiver: address = msg.sender) -> uint256:
-    excess: uint256 = voting_escrow.locked(proxy.address) - self.totalSupply
+    excess: uint256 = voting_escrow.locked(proxy.address) * SCALE - self.totalSupply
     self._mint(excess, _receiver)
     return excess
 
