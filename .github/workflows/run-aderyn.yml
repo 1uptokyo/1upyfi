@@ -1,0 +1,59 @@
+name: run-aderyn
+
+permissions:
+  actions: read
+  contents: read
+  security-events: write
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [ "*" ]
+
+env:
+  FOUNDRY_PROFILE: ci
+
+jobs:
+  check:
+    strategy:
+      fail-fast: true
+
+    name: Foundry project
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+      
+      - name: Install Forge Dependencies
+        run: |
+          forge install foundry-rs/forge-std --no-commit
+          forge install openzeppelin/openzeppelin-contracts --no-commit
+        id: install
+
+      - name: Run Forge build
+        run: |
+          forge remappings
+          forge --version
+          forge build --sizes
+        id: build
+
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Check Cargo & Install Aderyn
+        run: cargo --help && cargo install aderyn
+
+      - name: Check Aderyn version
+        run: aderyn -V
+
+      - name: Run Aderyn
+        run: aderyn . -o report.md && cat report.md

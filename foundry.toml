@@ -1,0 +1,36 @@
+[profile.default]
+solc-version = "0.8.20"
+optimizer = true
+optimizer-runs = 200
+evm-version = "shanghai"
+src = "contracts"
+out = "out"
+libs = ["lib"]
+
+ffi = true     # to enable vyperDeployer calling vyper compiler
+
+# Update Slither/Mythrill config files and GH actions when you update the dependencies:
+remappings = [
+    "@openzeppelin/=lib/openzeppelin-contracts/",
+    "forge-std/=lib/forge-std/src/"
+]
+
+PK_ACCOUNT = "${PK_ACCOUNT}"
+
+[rpc_endpoints]
+eth_mainnet = "${ETH_MAINNET_RPC_URL}"
+bsc_mainnet = "${BSC_MAINNET_RPC_URL}"
+matic_mainnet = "${MATIC_MAINNET_RPC_URL}"
+arb_mainnet = "${ARB_MAINNET_RPC_URL}"
+op_mainnet = "${OP_MAINNET_RPC_URL}"
+avax_mainnet = "${AVAX_MAINNET_RPC_URL}"
+ftm_mainnet = "${FTM_MAINNET_RPC_URL}"
+base_mainnet = "${BASE_MAINNET_RPC_URL}"
+zksync_mainnet = "${ZKSYNC_MAINNET_RPC_URL}"
+
+# See more config options https://github.com/foundry-rs/foundry/tree/master/config
+
+[profile.default.invariant]
+fail_on_revert = false
+runs = 2000
+depth = 23
