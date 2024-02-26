@@ -27,7 +27,7 @@ voting_escrow: public(immutable(VotingEscrow))
 liquid_locker: public(immutable(LiquidLocker))
 discount_token: public(immutable(ERC20))
 proxy: public(immutable(address))
-collector: public(immutable(address))
+rewards: public(immutable(address))
 management: public(address)
 pending_management: public(address)
 yearn_redemption: public(YearnRedemption)
@@ -36,13 +36,13 @@ curve_pool: public(CurvePool)
 @external
 def __init__(
     _voting_escrow: address, _liquid_locker: address, _discount_token: address, 
-    _proxy: address, _collector: address,
+    _proxy: address, _rewards: address,
 ):
     voting_escrow = VotingEscrow(_voting_escrow)
     liquid_locker = LiquidLocker(_liquid_locker)
     discount_token = ERC20(_discount_token)
     proxy = _proxy
-    collector = _collector
+    rewards = _rewards
     self.management = msg.sender
     assert ERC20(liquid_locker.token()).approve(_voting_escrow, max_value(uint256), default_return_value=True)
 
@@ -54,8 +54,8 @@ def __default__():
 @external
 @payable
 def redeem(_account: address, _receiver: address, _amount: uint256, _data: Bytes[256]):
-    assert msg.sender == collector
-    assert discount_token.transferFrom(collector, self, _amount, default_return_value=True)
+    assert msg.sender == rewards
+    assert discount_token.transferFrom(rewards, self, _amount, default_return_value=True)
     if msg.value > 0:
         self._redeem_yearn(_receiver, _amount, msg.value)
     else:

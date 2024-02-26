@@ -24,6 +24,7 @@ EIP1271_MAGIC_VALUE: constant(bytes4) = 0x1626ba7e
 def __init__(_voting_escrow: address):
     voting_escrow = VotingEscrow(_voting_escrow)
     self.management = msg.sender
+    self.operators[msg.sender] = True
 
 @external
 @view

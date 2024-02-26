@@ -7,10 +7,10 @@ interface Registry:
     def register(_gauge: address) -> uint256: nonpayable
 
 yearn_registry: public(immutable(YearnRegistry))
-reward: public(immutable(address))
+reward_token: public(immutable(address))
 proxy: public(immutable(address))
 registry: public(immutable(Registry))
-collector: public(immutable(address))
+rewards: public(immutable(address))
 
 management: public(address)
 pending_management: public(address)
@@ -26,12 +26,12 @@ event SetManagement:
     management: address
 
 @external
-def __init__(_yearn_registry: address, _reward: address, _proxy: address, _registry: address, _collector: address):
+def __init__(_yearn_registry: address, _reward_token: address, _proxy: address, _registry: address, _rewards: address):
     yearn_registry = YearnRegistry(_yearn_registry)
-    reward = _reward
+    reward_token = _reward_token
     proxy = _proxy
     registry = Registry(_registry)
-    collector = _collector
+    rewards = _rewards
 
     self.management = msg.sender
 
@@ -45,8 +45,8 @@ def deploy_gauge(_ygauge: address) -> address:
         blueprint,
         _ygauge,
         proxy,
-        reward,
-        collector,
+        reward_token,
+        rewards,
         code_offset=3
     )
     registry.register(gauge)

@@ -6,7 +6,7 @@ from _constants import _deploy_blueprint, ZERO_ADDRESS
 YGAUGE = '0x7Fd8Af959B54A677a1D8F92265Bd0714274C56a3' # YFI/ETH yGauge
 
 @fixture
-def collector(accounts):
+def rewards(accounts):
     return accounts[3]
 
 @fixture
@@ -34,8 +34,8 @@ def blueprint(project, deployer):
     return _deploy_blueprint(project.Gauge, deployer)
 
 @fixture
-def factory(project, deployer, proxy, collector, yearn_registry, reward_token, registry, blueprint):
-    factory = project.Factory.deploy(yearn_registry, reward_token, proxy, registry, collector, sender=deployer)
+def factory(project, deployer, proxy, rewards, yearn_registry, reward_token, registry, blueprint):
+    factory = project.Factory.deploy(yearn_registry, reward_token, proxy, registry, rewards, sender=deployer)
     factory.set_gauge_blueprint(blueprint, sender=deployer)
     registry.set_registrar(factory, sender=deployer)
     return factory

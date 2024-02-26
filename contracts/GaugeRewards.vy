@@ -32,11 +32,10 @@ REDEEM_SELL_FEE_IDX: constant(uint256) = 2 # claim with redeem, without ETH
 REDEEM_FEE_IDX: constant(uint256)      = 3 # claim with redeem, with ETH
 
 @external
-def __init__(_reward_token: address, _registry: address, _redeemer: address):
+def __init__(_reward_token: address, _registry: address):
     reward_token = ERC20(_reward_token)
     registry = Registry(_registry)
     self.management = msg.sender
-    self.redeemer = _redeemer
 
 @external
 @view
@@ -80,8 +79,9 @@ def claim(_gauges: DynArray[address, 32], _receiver: address = msg.sender, _rede
         amount -= fee
 
     if redeem:
-        assert self.redeemer.address != empty(address)
-        self.redeemer.redeem(msg.sender, _receiver, amount, _redeem_data, value=msg.value)
+        redeemer: Redeemer = self.redeemer
+        assert redeemer.address != empty(address)
+        redeemer.redeem(msg.sender, _receiver, amount, _redeem_data, value=msg.value)
     else:
         assert reward_token.transfer(_receiver, amount, default_return_value=True)
 
@@ -104,9 +104,9 @@ def harvest(_gauges: DynArray[address, 32], _receiver: address = msg.sender) -> 
         integral += amount * PRECISION / supply
         self.packed_supply[gauge] = self._pack(supply, integral)
 
-        assert reward.transferFrom(gauge, self, amount, default_return_value=True)
+        assert reward_token.transferFrom(gauge, self, amount, default_return_value=True)
 
-    assert reward.transfer(_receiver, total_fees, default_return_value=True)
+    assert reward_token.transfer(_receiver, total_fees, default_return_value=True)
     return total_fees
 
 @external
@@ -133,7 +133,7 @@ def report(_ygauge: address, _from: address, _to: address, _amount: uint256, _re
 
     if _rewards > 0 and supply > 0:
         integral += _rewards * PRECISION / supply
-        assert reward.transferFrom(msg.sender, self, _rewards, default_return_value=True)
+        assert reward_token.transferFrom(msg.sender, self, _rewards, default_return_value=True)
 
     if _from == empty(address) and _to == empty(address):
         self.packed_supply[msg.sender] = self._pack(supply, integral)
