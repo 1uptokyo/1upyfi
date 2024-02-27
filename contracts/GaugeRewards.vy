@@ -17,7 +17,7 @@ interface Registry:
 interface Redeemer:
     def redeem(_account: address, _receiver: address, _lt_amount: uint256, _dt_amount: uint256, _data: Bytes[256]): payable
 
-reward_token: public(immutable(ERC20))
+discount_token: public(immutable(ERC20))
 registry: public(immutable(Registry))
 management: public(address)
 pending_management: public(address)
@@ -39,8 +39,8 @@ REDEEM_SELL_FEE_IDX: constant(uint256) = 2 # claim with redeem, without ETH
 REDEEM_FEE_IDX: constant(uint256)      = 3 # claim with redeem, with ETH
 
 @external
-def __init__(_reward_token: address, _registry: address):
-    reward_token = ERC20(_reward_token)
+def __init__(_discount_token: address, _registry: address):
+    discount_token = ERC20(_discount_token)
     registry = Registry(_registry)
     self.management = msg.sender
 
@@ -91,7 +91,7 @@ def claim(_gauges: DynArray[address, 32], _receiver: address = msg.sender, _rede
         assert redeemer.address != empty(address)
         redeemer.redeem(msg.sender, _receiver, 0, amount, _redeem_data, value=msg.value)
     else:
-        assert reward_token.transfer(_receiver, amount, default_return_value=True)
+        assert discount_token.transfer(_receiver, amount, default_return_value=True)
 
 @external
 def harvest(_gauges: DynArray[address, 32], _receiver: address = msg.sender) -> uint256:
@@ -112,9 +112,9 @@ def harvest(_gauges: DynArray[address, 32], _receiver: address = msg.sender) -> 
         integral += amount * PRECISION / supply
         self.packed_supply[gauge] = self._pack(supply, integral)
 
-        assert reward_token.transferFrom(gauge, self, amount, default_return_value=True)
+        assert discount_token.transferFrom(gauge, self, amount, default_return_value=True)
 
-    assert reward_token.transfer(_receiver, total_fees, default_return_value=True)
+    assert discount_token.transfer(_receiver, total_fees, default_return_value=True)
     return total_fees
 
 @external
@@ -141,7 +141,7 @@ def report(_ygauge: address, _from: address, _to: address, _amount: uint256, _re
 
     if _rewards > 0 and supply > 0:
         integral += _rewards * PRECISION / supply
-        assert reward_token.transferFrom(msg.sender, self, _rewards, default_return_value=True)
+        assert discount_token.transferFrom(msg.sender, self, _rewards, default_return_value=True)
 
     if _from == empty(address) and _to == empty(address):
         self.packed_supply[msg.sender] = self._pack(supply, integral)
@@ -199,7 +199,7 @@ def claim_fees(_receiver: address = msg.sender):
     assert msg.sender == self.treasury
     pending: uint256 = self.packed_fees & MASK
     self._set_pending_fees(0)
-    assert reward_token.transfer(_receiver, pending, default_return_value=True)
+    assert discount_token.transfer(_receiver, pending, default_return_value=True)
 
 @internal
 def _set_pending_fees(_pending: uint256):
@@ -216,10 +216,10 @@ def set_redeemer(_redeemer: address):
     previous: address = self.redeemer.address
     if previous != empty(address):
         # retract previous allowance
-        assert reward_token.approve(previous, 0, default_return_value=True)
+        assert discount_token.approve(previous, 0, default_return_value=True)
     if _redeemer != empty(address):
         # set new allowance
-        assert reward_token.approve(_redeemer, max_value(uint256), default_return_value=True)
+        assert discount_token.approve(_redeemer, max_value(uint256), default_return_value=True)
 
     self.redeemer = Redeemer(_redeemer)
 
