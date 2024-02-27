@@ -2,6 +2,12 @@
 
 from vyper.interfaces import ERC20
 
+interface Rewards:
+    def report(_ygauge: address, _from: address, _to: address, _amount: uint256, _rewards: uint256): nonpayable
+    def gauge_supply(_gauge: address) -> uint256: view
+    def gauge_balance(_gauge: address, _account: address) -> uint256: view
+implements: Rewards
+
 interface Gauge:
     def harvest() -> uint256: nonpayable
 
@@ -16,6 +22,7 @@ registry: public(immutable(Registry))
 management: public(address)
 pending_management: public(address)
 redeemer: public(Redeemer)
+treasury: public(address)
 packed_supply: public(HashMap[address, uint256])
 packed_balances: public(HashMap[address, HashMap[address, uint256]])
 pending_rewards: public(HashMap[address, uint256])
@@ -73,10 +80,11 @@ def claim(_gauges: DynArray[address, 32], _receiver: address = msg.sender, _rede
         else:
             # redeem by partially selling the rewards
             fee = REDEEM_SELL_FEE_IDX
-    fee = self._fee(fee)
+    fee = self._fee_rate(fee)
     if fee > 0:
         fee = amount * fee / FEE_DENOMINATOR
         amount -= fee
+        self._set_pending_fees((self.packed_fees & MASK) + fee)
 
     if redeem:
         redeemer: Redeemer = self.redeemer
@@ -177,25 +185,28 @@ def pending_fees() -> uint256:
 
 @external
 @view
-def fee(_idx: uint256) -> uint256:
+def fee_rate(_idx: uint256) -> uint256:
     return self._fee(_idx)
 
 @internal
 @view
-def _fee(_idx: uint256) -> uint256:
+def _fee_rate(_idx: uint256) -> uint256:
     assert _idx < 4
     return (self.packed_fees >> 32 * (4 + _idx)) & FEE_MASK
 
-@external
-def set_fee(_idx: uint256, _fee: uint256):
-    assert msg.sender == self.management
-    assert _idx < 4
-    assert _fee <= FEE_DENOMINATOR
+@internal
+def _set_pending_fees(_pending: uint256):
+    assert _pending <= MASK
     packed: uint256 = self.packed_fees
-    sh: uint256 = 32 * (4 + _idx)
-    packed &= ~(FEE_MASK << sh) # zero out old fee
-    packed |= _fee << sh # write new fee
+    packed &= ~MASK # zero out old fee
+    packed |= _pending # write new fee
     self.packed_fees = packed
+
+@external
+def claim_fees(_receiver: address = msg.sender):
+    assert msg.sender == self.treasury
+    pending: uint256 = self.packed_fees & MASK
+    assert reward_token.transfer(_receiver, pending, default_return_value=True)
 
 @external
 def set_redeemer(_redeemer: address):
@@ -210,6 +221,22 @@ def set_redeemer(_redeemer: address):
         assert reward_token.approve(_redeemer, max_value(uint256), default_return_value=True)
 
     self.redeemer = Redeemer(_redeemer)
+
+@external
+def set_treasury(_treasury: address):
+    assert msg.sender == self.management
+    self.treasury = _treasury
+
+@external
+def set_fee_rate(_idx: uint256, _fee: uint256):
+    assert msg.sender == self.management
+    assert _idx < 4
+    assert _fee <= FEE_DENOMINATOR
+    packed: uint256 = self.packed_fees
+    sh: uint256 = 32 * (4 + _idx)
+    packed &= ~(FEE_MASK << sh) # zero out old fee
+    packed |= _fee << sh # write new fee
+    self.packed_fees = packed
 
 @internal
 @pure
