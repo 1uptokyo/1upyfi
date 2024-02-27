@@ -10,6 +10,7 @@ totalSupply: public(uint256)
 previous_packed_balances: public(HashMap[address, uint256]) # week | time | balance
 packed_balances: public(HashMap[address, uint256]) # week | time | balance
 packed_streams: public(HashMap[address, uint256]) # time | total | claimed
+unlock_times: public(HashMap[address, uint256])
 allowance: public(HashMap[address, HashMap[address, uint256]])
 
 decimals: public(constant(uint8)) = 18
@@ -43,6 +44,7 @@ SMALL_MASK: constant(uint256) = 2**32 - 1
 BIG_MASK: constant(uint256) = 2**112 - 1
 DAY_LENGTH: constant(uint256) = 24 * 60 * 60
 WEEK_LENGTH: constant(uint256) = 7 * DAY_LENGTH
+RAMP_LENGTH: constant(uint256) = 8 * WEEK_LENGTH
 INCREMENT: constant(bool) = True
 DECREMENT: constant(bool) = False
 
@@ -163,7 +165,41 @@ def redeem(_shares: uint256, _receiver: address = msg.sender, _owner: address = 
     return _shares
 
 @external
+def lock(_duration: uint256) -> uint256:
+    old_duration: uint256 = self.unlock_times[msg.sender]
+    if old_duration > block.timestamp:
+        old_duration -= block.timestamp
+    else:
+        old_duration = 0
+
+    current_week: uint256 = block.timestamp / WEEK_LENGTH
+    week: uint256 = 0
+    time: uint256 = 0
+    balance: uint256 = 0
+    week, time, balance = self._unpack(self.packed_balances[msg.sender])
+
+    if current_week > week:
+        self.previous_packed_balances[msg.sender] = self.packed_balances[msg.sender]
+
+    new_duration: uint256 = min(_duration, RAMP_LENGTH)
+    assert new_duration > old_duration or balance == 0
+    
+    if balance > 0:
+        if time == 0:
+            time = block.timestamp
+        time -= new_duration - old_duration
+    else:
+        time = 0
+
+    self.packed_balances[msg.sender] = self._pack(current_week, time, balance)
+
+    unlock_time: uint256 = block.timestamp + new_duration
+    self.unlock_times[msg.sender] = unlock_time
+    return unlock_time
+
+@external
 def unstake(_assets: uint256):
+    assert _assets > 0
     self.totalSupply -= _assets
     self._update_balance(_assets, msg.sender, DECREMENT)
 
@@ -182,6 +218,25 @@ def _deposit(_assets: uint256, _receiver: address):
     assert ERC20(asset).transferFrom(msg.sender, self, _assets, default_return_value=True)
     log Deposit(msg.sender, _receiver, _assets, _assets)
     log Transfer(empty(address), _receiver, _assets)
+
+@external
+@view
+def vote_weight(_account: address) -> uint256:
+    last_week: uint256 = block.timestamp / WEEK_LENGTH - 1
+
+    week: uint256 = 0
+    time: uint256 = 0
+    balance: uint256 = 0
+    week, time, balance = self._unpack(self.packed_balances[_account])
+
+    if week > last_week:
+        week, time, balance = self._unpack(self.previous_packed_balances[_account])
+
+    if balance == 0:
+        return 0
+
+    time = (block.timestamp / WEEK_LENGTH * WEEK_LENGTH) - time
+    return balance * min(time, RAMP_LENGTH) / RAMP_LENGTH
 
 @internal
 @view
@@ -223,6 +278,12 @@ def _withdraw(_assets: uint256, _receiver: address, _owner: address):
 
 @internal
 def _update_balance(_amount: uint256, _account: address, _increment: bool):
+    lock_duration: uint256 = self.unlock_times[_account]
+    if lock_duration > block.timestamp:
+        lock_duration -= block.timestamp
+    else:
+        lock_duration = 0
+
     current_week: uint256 = block.timestamp / WEEK_LENGTH
     week: uint256 = 0
     time: uint256 = 0
@@ -230,13 +291,15 @@ def _update_balance(_amount: uint256, _account: address, _increment: bool):
     week, time, balance = self._unpack(self.packed_balances[_account])
 
     if _increment == INCREMENT:
-        dt: uint256 = 0
         if time > 0:
-            dt = block.timestamp - time
-        time = block.timestamp - balance * dt / (balance + _amount)
+            time = min(block.timestamp - time, RAMP_LENGTH)
+        time = block.timestamp - (balance * time + _amount * lock_duration) / (balance + _amount)
         balance += _amount
     else:
+        assert lock_duration == 0
         balance -= _amount
+        if balance == 0:
+            time = 0
 
     if current_week > week:
         self.previous_packed_balances[_account] = self.packed_balances[_account]
