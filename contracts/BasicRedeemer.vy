@@ -81,6 +81,7 @@ def redeem(_account: address, _receiver: address, _lt_amount: uint256, _dt_amoun
     if self.balance > 0:
         raw_call(self.treasury, b"", value=self.balance)
 
+    # deposit into our lock and mint
     voting_escrow.modify_lock(amount, 0, proxy)
     assert liquid_locker.mint(_receiver) >= amount
 

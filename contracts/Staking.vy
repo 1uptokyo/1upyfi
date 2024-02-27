@@ -5,7 +5,13 @@ from vyper.interfaces import ERC4626
 implements: ERC20
 implements: ERC4626
 
+interface Rewards:
+    def report(_account: address, _balance: uint256): nonpayable
+
 asset: public(immutable(address))
+management: public(address)
+pending_management: public(address)
+rewards: public(Rewards)
 totalSupply: public(uint256)
 previous_packed_balances: public(HashMap[address, uint256]) # week | time | balance
 packed_balances: public(HashMap[address, uint256]) # week | time | balance
@@ -238,6 +244,11 @@ def vote_weight(_account: address) -> uint256:
     time = (block.timestamp / WEEK_LENGTH * WEEK_LENGTH) - time
     return balance * min(time, RAMP_LENGTH) / RAMP_LENGTH
 
+@external
+def set_rewards(_rewards: address):
+    assert msg.sender == self.management
+    self.rewards = Rewards(_rewards)
+
 @internal
 @view
 def _withdrawable(_account: address) -> uint256:
@@ -289,6 +300,9 @@ def _update_balance(_amount: uint256, _account: address, _increment: bool):
     time: uint256 = 0
     balance: uint256 = 0
     week, time, balance = self._unpack(self.packed_balances[_account])
+
+    # sync rewards
+    self.rewards.report(_account, balance)
 
     if _increment == INCREMENT:
         if time > 0:
