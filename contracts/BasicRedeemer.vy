@@ -3,7 +3,7 @@
 from vyper.interfaces import ERC20
 
 interface Redeemer:
-    def redeem(_account: address, _receiver: address, _amount: uint256, _data: Bytes[256]): payable
+    def redeem(_account: address, _receiver: address, _lt_amount: uint256, _dt_amount: uint256, _data: Bytes[256]): payable
 
 interface VotingEscrow:
     def modify_lock(_amount: uint256, _unlock_time: uint256, _account: address): nonpayable
@@ -25,26 +25,32 @@ implements: Redeemer
 
 voting_escrow: public(immutable(VotingEscrow))
 liquid_locker: public(immutable(LiquidLocker))
+locking_token: public(immutable(ERC20))
 discount_token: public(immutable(ERC20))
 proxy: public(immutable(address))
-rewards: public(immutable(address))
+gauge_rewards: public(immutable(address))
+staking_rewards: public(immutable(address))
 management: public(address)
 pending_management: public(address)
+treasury: public(address)
 yearn_redemption: public(YearnRedemption)
 curve_pool: public(CurvePool)
 
 @external
 def __init__(
-    _voting_escrow: address, _liquid_locker: address, _discount_token: address, 
-    _proxy: address, _rewards: address,
+    _voting_escrow: address, _liquid_locker: address, _locking_token: address, _discount_token: address, 
+    _proxy: address, _gauge_rewards: address, _staking_rewards: address,
 ):
     voting_escrow = VotingEscrow(_voting_escrow)
     liquid_locker = LiquidLocker(_liquid_locker)
+    locking_token = ERC20(_locking_token)
     discount_token = ERC20(_discount_token)
     proxy = _proxy
-    rewards = _rewards
+    gauge_rewards = _gauge_rewards
+    staking_rewards = _staking_rewards
     self.management = msg.sender
-    assert ERC20(liquid_locker.token()).approve(_voting_escrow, max_value(uint256), default_return_value=True)
+    self.treasury = msg.sender
+    assert locking_token.approve(_voting_escrow, max_value(uint256), default_return_value=True)
 
 @external
 @payable
@@ -53,13 +59,30 @@ def __default__():
 
 @external
 @payable
-def redeem(_account: address, _receiver: address, _amount: uint256, _data: Bytes[256]):
-    assert msg.sender == rewards
-    assert discount_token.transferFrom(rewards, self, _amount, default_return_value=True)
-    if msg.value > 0:
-        self._redeem_yearn(_receiver, _amount, msg.value)
+def redeem(_account: address, _receiver: address, _lt_amount: uint256, _dt_amount: uint256, _data: Bytes[256]):
+    assert msg.sender == staking_rewards or msg.sender == gauge_rewards
+    assert _lt_amount > 0 or _dt_amount > 0
+
+    if _lt_amount > 0:
+        assert locking_token.transferFrom(msg.sender, self, _lt_amount, default_return_value=True)
+    amount: uint256 = _lt_amount + _dt_amount
+
+    if _dt_amount > 0:
+        assert discount_token.transferFrom(msg.sender, self, _dt_amount, default_return_value=True)
+        if msg.value > 0:
+            self._redeem_yearn(_receiver, _dt_amount, msg.value)
+        else:
+            sell_amount: uint256 = _abi_decode(_data, uint256)
+            amount -= sell_amount
+            self._redeem_curve(_receiver, _dt_amount, sell_amount)
     else:
-        self._redeem_curve(_receiver, _amount, _data)
+        assert msg.value == 0
+
+    if self.balance > 0:
+        raw_call(self.treasury, b"", value=self.balance)
+
+    voting_escrow.modify_lock(amount, 0, proxy)
+    assert liquid_locker.mint(_receiver) >= amount
 
 @internal
 def _redeem_yearn(_receiver: address, _amount: uint256, _eth_amount: uint256):
@@ -68,16 +91,12 @@ def _redeem_yearn(_receiver: address, _amount: uint256, _eth_amount: uint256):
     assert value > 0
     assert _eth_amount >= value, "slippage"
     self.yearn_redemption.redeem(_amount, value=value)
-    voting_escrow.modify_lock(_amount, 0, proxy)
-    assert liquid_locker.mint(_receiver) >= _amount
 
 @internal
-def _redeem_curve(_receiver: address, _amount: uint256, _data: Bytes[256]):
-    sell_amount: uint256 = _abi_decode(_data, uint256)
-    # min_dy is set to zero because yearn redemption already has built in slippage check
-    eth_amount: uint256 = self.curve_pool.exchange(0, 1, sell_amount, 0, True)
-    self._redeem_yearn(_receiver, _amount - sell_amount, eth_amount)
-    pass
+def _redeem_curve(_receiver: address, _dt_amount: uint256, _sell_amount: uint256):
+    # min_dy is set to zero because discount token redemption already has built in slippage check
+    eth_amount: uint256 = self.curve_pool.exchange(0, 1, _sell_amount, 0, True)
+    self._redeem_yearn(_receiver, _dt_amount - _sell_amount, eth_amount)
 
 @external
 def set_yearn_redemption(_yearn_redemption: address):

@@ -15,7 +15,7 @@ interface Registry:
     def gauge_map(_ygauge: address) -> address: view
 
 interface Redeemer:
-    def redeem(_account: address, _receiver: address, _amount: uint256, _data: Bytes[256]): payable
+    def redeem(_account: address, _receiver: address, _lt_amount: uint256, _dt_amount: uint256, _data: Bytes[256]): payable
 
 reward_token: public(immutable(ERC20))
 registry: public(immutable(Registry))
@@ -89,7 +89,7 @@ def claim(_gauges: DynArray[address, 32], _receiver: address = msg.sender, _rede
     if redeem:
         redeemer: Redeemer = self.redeemer
         assert redeemer.address != empty(address)
-        redeemer.redeem(msg.sender, _receiver, amount, _redeem_data, value=msg.value)
+        redeemer.redeem(msg.sender, _receiver, 0, amount, _redeem_data, value=msg.value)
     else:
         assert reward_token.transfer(_receiver, amount, default_return_value=True)
 
@@ -194,6 +194,13 @@ def _fee_rate(_idx: uint256) -> uint256:
     assert _idx < 4
     return (self.packed_fees >> 32 * (4 + _idx)) & FEE_MASK
 
+@external
+def claim_fees(_receiver: address = msg.sender):
+    assert msg.sender == self.treasury
+    pending: uint256 = self.packed_fees & MASK
+    self._set_pending_fees(0)
+    assert reward_token.transfer(_receiver, pending, default_return_value=True)
+
 @internal
 def _set_pending_fees(_pending: uint256):
     assert _pending <= MASK
@@ -201,12 +208,6 @@ def _set_pending_fees(_pending: uint256):
     packed &= ~MASK # zero out old fee
     packed |= _pending # write new fee
     self.packed_fees = packed
-
-@external
-def claim_fees(_receiver: address = msg.sender):
-    assert msg.sender == self.treasury
-    pending: uint256 = self.packed_fees & MASK
-    assert reward_token.transfer(_receiver, pending, default_return_value=True)
 
 @external
 def set_redeemer(_redeemer: address):
