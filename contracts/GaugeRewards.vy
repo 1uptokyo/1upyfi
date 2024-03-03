@@ -135,7 +135,7 @@ def report(_ygauge: address, _from: address, _to: address, _amount: uint256, _re
         assert _amount == 0 and _rewards > 0
         self.packed_supply[msg.sender] = self._pack(supply, integral)
         return
-    assert _from != _to and _to != self and _amount > 0
+    assert _from != _to and _to != self and _to != _ygauge and _amount > 0
     
     account_balance: uint256 = 0
     account_integral: uint256 = 0

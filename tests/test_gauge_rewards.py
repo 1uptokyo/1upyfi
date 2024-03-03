@@ -1,6 +1,6 @@
-from _constants import MAX_VALUE, UNIT, ZERO_ADDRESS
 from ape import reverts
 from pytest import fixture
+from _constants import *
 
 HARVEST_FEE_IDX     = 0 # harvest
 FEE_IDX             = 1 # claim without redeem
