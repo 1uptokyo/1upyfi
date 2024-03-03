@@ -27,5 +27,9 @@ def voting_escrow():
     return Contract(VEYFI)
 
 @fixture
+def reward_token():
+    return Contract(DYFI)
+
+@fixture
 def proxy(project, deployer, voting_escrow):
     return project.Proxy.deploy(voting_escrow, sender=deployer)
