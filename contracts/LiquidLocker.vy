@@ -1,10 +1,7 @@
 # @version 0.3.10
 
 from vyper.interfaces import ERC20
-from vyper.interfaces import ERC20Detailed
-
 implements: ERC20
-implements: ERC20Detailed
 
 interface Proxy:
     def modify_lock(_amount: uint256, _unlock_time: uint256): nonpayable
@@ -13,7 +10,7 @@ interface YearnVotingEscrow:
     def locked(_account: address) -> uint256: view
 
 token: public(immutable(ERC20))
-voting_escrow: immutable(YearnVotingEscrow)
+voting_escrow: public(immutable(YearnVotingEscrow))
 proxy: public(immutable(Proxy))
 
 totalSupply: public(uint256)
@@ -24,10 +21,6 @@ decimals: public(constant(uint8)) = 18
 name: public(constant(String[14])) = "1UP Locked YFI"
 symbol: public(constant(String[5])) = "upYFI"
 
-SCALE: constant(uint256) = 69_420
-WEEK: constant(uint256) = 7 * 24 * 60 * 60
-LOCK_TIME: constant(uint256) = 500 * WEEK
-
 event Transfer:
     _from: indexed(address)
     _to: indexed(address)
@@ -37,6 +30,10 @@ event Approval:
     _owner: indexed(address)
     _spender: indexed(address)
     _value: uint256
+
+SCALE: constant(uint256) = 69_420
+WEEK: constant(uint256) = 7 * 24 * 60 * 60
+LOCK_TIME: constant(uint256) = 500 * WEEK
 
 @external
 def __init__(_token: address, _voting_escrow: address, _proxy: address):
@@ -61,6 +58,7 @@ def mint(_receiver: address = msg.sender) -> uint256:
 def _mint(_amount: uint256, _receiver: address):
     assert _amount > 0
     assert _receiver != empty(address)
+
     self.totalSupply += _amount
     self.balanceOf[_receiver] += _amount
     log Transfer(empty(address), _receiver, _amount)
@@ -72,7 +70,6 @@ def extend_lock():
 @external
 def transfer(_to: address, _value: uint256) -> bool:
     assert _to != empty(address) and _to != self
-    assert _value > 0
 
     self.balanceOf[msg.sender] -= _value
     self.balanceOf[_to] += _value
@@ -82,11 +79,11 @@ def transfer(_to: address, _value: uint256) -> bool:
 @external
 def transferFrom(_from: address, _to: address, _value: uint256) -> bool:
     assert _to != empty(address) and _to != self
-    assert _value > 0
 
-    allowance: uint256 = self.allowance[_from][msg.sender] - _value
-    self.allowance[_from][msg.sender] = allowance
-    log Approval(_from, msg.sender, allowance)
+    if _value > 0:
+        allowance: uint256 = self.allowance[_from][msg.sender] - _value
+        self.allowance[_from][msg.sender] = allowance
+        log Approval(_from, msg.sender, allowance)
 
     self.balanceOf[_from] -= _value
     self.balanceOf[_to] += _value
