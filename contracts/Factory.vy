@@ -11,10 +11,13 @@ reward_token: public(immutable(address))
 proxy: public(immutable(address))
 registry: public(immutable(Registry))
 rewards: public(immutable(address))
-
 management: public(address)
 pending_management: public(address)
 gauge_blueprint: public(address)
+
+event DeployGauge:
+    ygauge: indexed(address)
+    gauge: address
 
 event SetGaugeBlueprint:
     blueprint: address
@@ -32,7 +35,6 @@ def __init__(_yearn_registry: address, _reward_token: address, _proxy: address, 
     proxy = _proxy
     registry = Registry(_registry)
     rewards = _rewards
-
     self.management = msg.sender
 
 @external
@@ -49,6 +51,7 @@ def deploy_gauge(_ygauge: address) -> address:
         rewards,
         code_offset=3
     )
+    log DeployGauge(_ygauge, gauge)
     registry.register(gauge)
     return gauge
 
