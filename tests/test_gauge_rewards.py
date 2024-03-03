@@ -70,6 +70,12 @@ def test_report_deposit_not_registered(deployer, alice, rewards, registry, ygaug
     with reverts():
         rewards.report(ygauge, ZERO_ADDRESS, alice, UNIT, 0, sender=gauge)
 
+def test_report_deposit_false(accounts, deployer, alice, rewards, registry, ygauge, gauge):
+    # gauge of which the underlying is registered to another gauge cannot report a deposit
+    registry.set_gauge_map(ygauge, accounts[5], sender=deployer)
+    with reverts():
+        rewards.report(ygauge, ZERO_ADDRESS, alice, UNIT, 0, sender=gauge)
+
 def test_report_withdraw(alice, rewards, ygauge, gauge):
     # withdraw removes from balance and supply
     rewards.report(ygauge, ZERO_ADDRESS, alice, 3 * UNIT, 0, sender=gauge)
