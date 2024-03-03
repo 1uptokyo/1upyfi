@@ -22,7 +22,6 @@ proxy: public(immutable(address))
 reward_token: public(immutable(ERC20))
 rewards: public(immutable(Rewards))
 decimals: public(constant(uint8)) = 18
-
 allowance: public(HashMap[address, HashMap[address, uint256]])
 
 event Transfer:
@@ -86,22 +85,24 @@ def balanceOf(_account: address) -> uint256:
 @external
 def transfer(_to: address, _value: uint256) -> bool:
     assert _to != empty(address) and _to != self
-    assert _value > 0
 
-    rewards.report(asset, msg.sender, _to, _value, 0)
+    if _value > 0:
+        rewards.report(asset, msg.sender, _to, _value, 0)
+
     log Transfer(msg.sender, _to, _value)
     return True
 
 @external
 def transferFrom(_from: address, _to: address, _value: uint256) -> bool:
     assert _to != empty(address) and _to != self
-    assert _value > 0
 
-    allowance: uint256 = self.allowance[_from][msg.sender] - _value
-    self.allowance[_from][msg.sender] = allowance
-    log Approval(_from, msg.sender, allowance)
+    if _value > 0:
+        allowance: uint256 = self.allowance[_from][msg.sender] - _value
+        self.allowance[_from][msg.sender] = allowance
+        log Approval(_from, msg.sender, allowance)
 
-    rewards.report(asset, _from, _to, _value, 0)
+        rewards.report(asset, _from, _to, _value, 0)
+
     log Transfer(_from, _to, _value)
     return True
 
@@ -188,14 +189,10 @@ def redeem(_shares: uint256, _receiver: address = msg.sender, _owner: address = 
     self._withdraw(_shares, _receiver, _owner)
     return _shares
 
-@external
-def harvest() -> uint256:
-    assert msg.sender == rewards.address
-    return self._harvest()
-
 @internal
 def _deposit(_assets: uint256, _receiver: address):
-    pending: uint256 = self._harvest()
+    assert _assets > 0
+    pending: uint256 = self._pending()
     rewards.report(asset, empty(address), _receiver, _assets, pending)
     assert ERC20(asset).transferFrom(msg.sender, proxy, _assets, default_return_value=True)
     log Deposit(msg.sender, _receiver, _assets, _assets)
@@ -203,17 +200,18 @@ def _deposit(_assets: uint256, _receiver: address):
 
 @internal
 def _withdraw(_assets: uint256, _receiver: address, _owner: address):
+    assert _assets > 0
     if _owner != msg.sender:
         allowance: uint256 = self.allowance[_owner][msg.sender] - _assets
         self.allowance[_owner][msg.sender] = allowance
         log Approval(_owner, msg.sender, allowance)
-    pending: uint256 = self._harvest()
+    pending: uint256 = self._pending()
     rewards.report(asset, _owner, empty(address), _assets, pending)
-    assert ERC20(asset).transferFrom(proxy, msg.sender, _assets, default_return_value=True)
+    assert ERC20(asset).transferFrom(proxy, _receiver, _assets, default_return_value=True)
     log Withdraw(msg.sender, _receiver, _owner, _assets, _assets)
     log Transfer(_owner, empty(address), _assets)
 
 @internal
-def _harvest() -> uint256:
+def _pending() -> uint256:
     YearnGauge(asset).getReward(proxy)
     return reward_token.balanceOf(self)
