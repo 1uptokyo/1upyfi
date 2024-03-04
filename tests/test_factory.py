@@ -4,8 +4,6 @@ from pytest import fixture
 from _constants import *
 from _constants import _deploy_blueprint
 
-YGAUGE = '0x7Fd8Af959B54A677a1D8F92265Bd0714274C56a3' # YFI/ETH yGauge
-
 @fixture
 def rewards(accounts):
     return accounts[3]

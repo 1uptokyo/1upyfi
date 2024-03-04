@@ -1,16 +1,5 @@
 from ape import reverts
-from pytest import fixture
 from _constants import *
-
-SCALE = 69_420 * UNIT
-
-@fixture
-def liquid_locker(project, deployer, locking_token, voting_escrow, proxy):
-    locker = project.LiquidLocker.deploy(locking_token, voting_escrow, proxy, sender=deployer)
-    data = locking_token.approve.encode_input(voting_escrow, MAX_VALUE)
-    proxy.call(locking_token, data, sender=deployer)
-    proxy.set_operator(locker, True, sender=deployer)
-    return locker
 
 def test_deposit_initial(ychad, alice, locking_token, voting_escrow, proxy, liquid_locker):
     # initial deposit creates the lock

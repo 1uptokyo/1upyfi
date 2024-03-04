@@ -27,9 +27,18 @@ def voting_escrow():
     return Contract(VEYFI)
 
 @fixture
-def reward_token():
+def discount_token():
     return Contract(DYFI)
 
 @fixture
-def proxy(project, deployer, voting_escrow):
-    return project.Proxy.deploy(voting_escrow, sender=deployer)
+def proxy(project, deployer, locking_token, voting_escrow):
+    proxy = project.Proxy.deploy(voting_escrow, sender=deployer)
+    data = locking_token.approve.encode_input(voting_escrow, MAX_VALUE)
+    proxy.call(locking_token, data, sender=deployer)
+    return proxy
+
+@fixture
+def liquid_locker(project, deployer, locking_token, voting_escrow, proxy):
+    locker = project.LiquidLocker.deploy(locking_token, voting_escrow, proxy, sender=deployer)
+    proxy.set_operator(locker, True, sender=deployer)
+    return locker
