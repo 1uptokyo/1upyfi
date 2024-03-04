@@ -5,3 +5,9 @@
 __pycache__/
 .DS_Store
 .python-version
+.env
+!.env.template
+coverage.json
+.vscode/*
+out
+cache
