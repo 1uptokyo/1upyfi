@@ -10,6 +10,7 @@
     "exclude_dependencies": true,
     "solc_remaps": [
         "@openzeppelin/=lib/openzeppelin-contracts/",
-        "forge-std/=lib/forge-std/src/"
+        "forge-std/=lib/forge-std/src/",
+        "foundry-random=lib/foundry-random/src/"
     ]
 }

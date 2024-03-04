@@ -11,9 +11,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 abstract contract BaseTest is Test {
     VyperDeployer internal deployer = new VyperDeployer();
 
-    function _deployToken(
-        address _deployer
-    ) internal returns (IMockToken) {
+    function _deployToken(address _deployer) internal returns (IMockToken) {
         vm.startPrank(_deployer);
         address _instance = deployer.deployContract(
             "contracts/mocks/",
@@ -21,6 +19,12 @@ abstract contract BaseTest is Test {
         );
         vm.stopPrank();
         return IMockToken(_instance);
+    }
+
+    function _deployVestingEscrowFactory(address _deployer) internal returns (IVestingEscrowFactory) {
+        IVestingEscrow _target = _deployVestingEscrowTarget(_deployer);
+        IVestingEscrowFactory _escrowFactory = _deployVestingEscrowFactory(_deployer, address(_target));
+        return _escrowFactory;
     }
 
     function _deployVestingEscrowFactory(

@@ -67,7 +67,6 @@ def deploy_vesting_contract(
     @param vesting_duration Time period (in seconds) over which tokens are released
     @param vesting_start Epoch time when tokens begin to vest
     @param open_claim Switch if anyone can claim for `recipient`
-    @param support_vyper Donation percentage in bps, 1% by default
     @param owner Vesting contract owner
     """
     assert cliff_length <= vesting_duration  # dev: incorrect vesting cliff
@@ -76,7 +75,6 @@ def deploy_vesting_contract(
     assert recipient not in [self, empty(address), token.address, owner] # dev: wrong recipient
 
     escrow: address = create_minimal_proxy_to(TARGET)
-    print(escrow, hardhat_compat=True)
     VestingEscrowSimple(escrow).initialize(
         owner,
         token,

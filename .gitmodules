@@ -6,4 +6,6 @@
 	branch = v5.0.1
 	path = lib/openzeppelin-contracts
 	url = https://github.com/openzeppelin/openzeppelin-contracts
-
+[submodule "lib/foundry-random"]
+	path = lib/foundry-random
+	url = https://github.com/joejordan/foundry-random

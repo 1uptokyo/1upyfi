@@ -12,7 +12,8 @@ ffi = true     # to enable vyperDeployer calling vyper compiler
 # Update Slither/Mythrill config files and GH actions when you update the dependencies:
 remappings = [
     "@openzeppelin/=lib/openzeppelin-contracts/",
-    "forge-std/=lib/forge-std/src/"
+    "forge-std/=lib/forge-std/src/",
+    "foundry-random=lib/foundry-random/src/",
 ]
 
 PK_ACCOUNT = "${PK_ACCOUNT}"

@@ -37,6 +37,7 @@ jobs:
         run: |
           forge install foundry-rs/forge-std --no-commit
           forge install openzeppelin/openzeppelin-contracts --no-commit
+          forge install joejordan/foundry-random --no-commit
         id: install
 
       - name: Run Forge build
