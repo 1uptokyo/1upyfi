@@ -1,4 +1,13 @@
 # @version 0.3.10
+"""
+@title Gauge registry
+@author 1up
+@license GNU AGPLv3
+@notice
+    Tracks the registered protocol gauges and the underlying Yearn gauges.
+    A Yearn gauge can have at most one protocol gauge in the registry.
+    Intended to be a proxy operator.
+"""
 
 interface Registry:
     def num_gauges() -> uint256: view
@@ -30,7 +39,11 @@ event Register:
 event Deregister:
     gauge: indexed(address)
     ygauge: indexed(address)
-    idx: uint256
+    idx: indexed(uint256)
+
+event NewIndex:
+    old_idx: indexed(uint256)
+    new_idx: uint256
 
 event SetRegistrar:
     registrar: address
@@ -43,6 +56,10 @@ event SetManagement:
 
 @external
 def __init__(_proxy: address):
+    """
+    @notice Constructor
+    @param _proxy Proxy
+    """
     proxy = Proxy(_proxy)
     self.management = msg.sender
     self.registrar = msg.sender
@@ -50,6 +67,11 @@ def __init__(_proxy: address):
 @external
 @view
 def gauges(_idx: uint256) -> address:
+    """
+    @notice Get the gauge at a certain index
+    @param _idx Index of the gauge
+    @return Gauge address
+    """
     assert _idx < self.num_gauges
     ygauge: address = self.ygauges[_idx]
     assert ygauge != empty(address)
@@ -57,6 +79,13 @@ def gauges(_idx: uint256) -> address:
 
 @external
 def register(_gauge: address) -> uint256:
+    """
+    @notice Register a gauge
+    @param _gauge Gauge address
+    @return Index of the newly registered gauge
+    @dev Can only be called by the registrar
+    @dev The underlying yearn Gauge cannot already be in the registry
+    """
     assert msg.sender == self.registrar
     ygauge: address = Gauge(_gauge).asset()
     assert ygauge != empty(address)
@@ -80,6 +109,12 @@ def register(_gauge: address) -> uint256:
 
 @external
 def deregister(_gauge: address, _idx: uint256):
+    """
+    @notice Deregister a gauge
+    @param _gauge Gauge address
+    @param _idx Gauge index
+    @dev Can only be called by management
+    """
     assert msg.sender == self.management
     ygauge: address = Gauge(_gauge).asset()
     assert self.gauge_map[ygauge] == _gauge
@@ -89,14 +124,20 @@ def deregister(_gauge: address, _idx: uint256):
     # and shorten array by one
     max_idx: uint256 = self.num_gauges - 1
     self.num_gauges = max_idx
+    log Deregister(_gauge, ygauge, _idx)
     if _idx != max_idx:
         self.ygauges[_idx] = self.ygauges[max_idx]
+        log NewIndex(max_idx, _idx)
     self.ygauges[max_idx] = empty(address)
     self.gauge_map[ygauge] = empty(address)
-    log Deregister(_gauge, ygauge, _idx)
 
 @external
 def set_registrar(_registrar: address):
+    """
+    @notice Set new registrar
+    @param _registrar Registrar
+    @dev Can only be called by management
+    """
     assert msg.sender == self.management
     self.registrar = _registrar
     log SetRegistrar(_registrar)
