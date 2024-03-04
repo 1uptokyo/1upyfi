@@ -1,0 +1,35 @@
+name: run-ape
+
+permissions:
+  actions: read
+  contents: read
+  security-events: write
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [ "*" ]
+
+env:
+  FOUNDRY_PROFILE: ci
+
+jobs:
+  check:
+    strategy:
+      fail-fast: true
+
+    name: Foundry project
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: ApeWorX/github-action@v2
+        with:
+            python-version: '3.10' # (optional)
+            ape-version-pin: '>=0.7.10' # (optional)
+            ape-plugins-list: 'solidity vyper==0.8.20' # (optional)
+      - run: ape test -s
