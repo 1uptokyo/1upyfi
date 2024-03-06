@@ -4,7 +4,7 @@
 @author 1up
 @license GNU AGPLv3
 @notice
-    Tracks fewards for stakers.
+    Tracks rewards for stakers.
     Gauges report changes in balances to this contract.
     Assumes that any amount of locking token and discount token in the proxy is a reward for stakers.
     Rewards can be harvested by anyone in exchange for a share of the rewards.
@@ -251,6 +251,11 @@ def report(_account: address, _balance: uint256):
     self._sync(_account, _balance)
 
 @external
+@view
+def pending_fees() -> (uint256, uint256):
+    return self._unpack(self.packed_pending_fees)
+
+@external
 def claim_fees():
     """
     @notice Claim fees by sending them to the treasury
@@ -354,6 +359,8 @@ def _sync(_account: address, _balance: uint256) -> (uint256, uint256):
     dt_integral: uint256 = 0
     lt_integral, dt_integral = self._unpack(self.packed_integrals)
     if _balance == 0:
+        # no rewards to be distributed, sync integrals only
+        self.packed_account_integrals[_account] = self.packed_integrals
         return lt_pending, dt_pending
 
     lt_account_integral: uint256 = 0
