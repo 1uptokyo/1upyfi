@@ -348,7 +348,6 @@ def _withdraw(_assets: uint256, _receiver: address, _owner: address):
     if _owner != msg.sender:
         allowance: uint256 = self.allowance[_owner][msg.sender] - _assets
         self.allowance[_owner][msg.sender] = allowance
-        log Approval(_owner, msg.sender, allowance)
     pending: uint256 = self._pending()
     rewards.report(asset, _owner, empty(address), _assets, pending)
     assert ERC20(asset).transferFrom(proxy, _receiver, _assets, default_return_value=True)

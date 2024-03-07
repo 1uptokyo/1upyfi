@@ -458,7 +458,6 @@ def _withdraw(_assets: uint256, _receiver: address, _owner: address):
     if _owner != msg.sender:
         allowance: uint256 = self.allowance[_owner][msg.sender] - _assets
         self.allowance[_owner][msg.sender] = allowance
-        log Approval(_owner, msg.sender, allowance)
 
     time: uint256 = 0
     total: uint256 = 0
