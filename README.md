@@ -18,7 +18,7 @@ ape plugins install .
 ```
 
 In `ape-config.yaml` of either this directory or `~/.ape`, add the following lines, where `https://RPC_URL` is replaced with the URL of your preferred RPC
-```
+```yaml
 geth:
   ethereum:
     mainnet:
