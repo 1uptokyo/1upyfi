@@ -35,27 +35,27 @@ name: public(constant(String[21])) = "Staked 1UP Locked YFI"
 symbol: public(constant(String[6])) = "supYFI"
 
 event Transfer:
-    _from: indexed(address)
-    _to: indexed(address)
-    _value: uint256
+    sender: indexed(address)
+    receiver: indexed(address)
+    value: uint256
 
 event Approval:
-    _owner: indexed(address)
-    _spender: indexed(address)
-    _value: uint256
+    owner: indexed(address)
+    spender: indexed(address)
+    value: uint256
 
 event Deposit:
-    _sender: indexed(address)
-    _owner: indexed(address)
-    _assets: uint256
-    _shares: uint256
+    sender: indexed(address)
+    owner: indexed(address)
+    assets: uint256
+    shares: uint256
 
 event Withdraw:
-    _sender: indexed(address)
-    _receiver: indexed(address)
-    _owner: indexed(address)
-    _assets: uint256
-    _shares: uint256
+    sender: indexed(address)
+    receiver: indexed(address)
+    owner: indexed(address)
+    assets: uint256
+    shares: uint256
 
 event SetRewards:
     rewards: address
