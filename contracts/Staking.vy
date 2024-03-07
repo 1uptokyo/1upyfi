@@ -118,14 +118,14 @@ def transferFrom(_from: address, _to: address, _value: uint256) -> bool:
     @return Always True
     """
     assert _to != empty(address) and _to != self
-    assert _value > 0
+    
+    if _value > 0:
+        allowance: uint256 = self.allowance[_from][msg.sender] - _value
+        self.allowance[_from][msg.sender] = allowance
 
-    allowance: uint256 = self.allowance[_from][msg.sender] - _value
-    self.allowance[_from][msg.sender] = allowance
-    log Approval(_from, msg.sender, allowance)
+        self._update_balance(_value, _from, DECREMENT)
+        self._update_balance(_value, _to, INCREMENT)
 
-    self._update_balance(_value, _from, DECREMENT)
-    self._update_balance(_value, _to, INCREMENT)
     log Transfer(_from, _to, _value)
     return True
 

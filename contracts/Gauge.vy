@@ -148,7 +148,6 @@ def transferFrom(_from: address, _to: address, _value: uint256) -> bool:
     if _value > 0:
         allowance: uint256 = self.allowance[_from][msg.sender] - _value
         self.allowance[_from][msg.sender] = allowance
-        log Approval(_from, msg.sender, allowance)
 
         rewards.report(asset, _from, _to, _value, 0)
 
