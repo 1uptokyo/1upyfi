@@ -101,10 +101,11 @@ def transfer(_to: address, _value: uint256) -> bool:
     @return Always True
     """
     assert _to != empty(address) and _to != self
-    assert _value > 0
 
-    self._update_balance(_value, msg.sender, DECREMENT)
-    self._update_balance(_value, _to, INCREMENT)
+    if _value > 0:
+        self._update_balance(_value, msg.sender, DECREMENT)
+        self._update_balance(_value, _to, INCREMENT)
+
     log Transfer(msg.sender, _to, _value)
     return True
 
