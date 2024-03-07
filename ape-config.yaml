@@ -2,6 +2,7 @@ name: 1upyfi
 plugins:
   - name: vyper
   - name: foundry
+  - name: etherscan
 ethereum:
   default_network: mainnet-fork
   mainnet_fork:
