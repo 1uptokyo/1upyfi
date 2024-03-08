@@ -91,6 +91,7 @@ def set_signed_message(_hash: bytes32, _signed: bool):
     @dev Can only be called by operators
     """
     assert self.operators[msg.sender]
+    assert _hash != empty(_hash)
     self.messages[_hash] = _signed
     log SetSignedMessage(_hash, _signed)
 
@@ -103,6 +104,7 @@ def set_operator(_operator: address, _flag: bool):
     @dev Can only be called by management
     """
     assert msg.sender == self.management
+    assert _operator != empty(address)
     self.operators[_operator] = _flag
     log SetOperator(_operator, _flag)
 
