@@ -27,6 +27,7 @@
 - The registrar has the ability to register gauges
 - On registration the gauge is approved to transfer yGauge tokens out of the proxy
 - On registration the gauge is configured as reward recipient in the yGauge
+- Management can mark any address as disabled, making them ineligible for registration as yGauge
 - Management has the ability to deregister gauges
 - Management can set the registrar
 
@@ -70,6 +71,27 @@
 - Management can set the treasury address
 
 ### Staking
+- Implements ERC20: supYFI
+- Implements ERC4626 with upYFI as underlying asset
+- Is always 1:1 with underlying
+- Users can deposit upYFI to become eligible for YFI/dYFI rewards and voting power on Yearn governance
+- Before any change in balance (due to deposit/unstake/transfer) the previous balance is reported to a rewards contract
+- upYFI cannot be freely withdrawn from the staking contract, it has to be unstaked first
+- Upon unstaking the supply and user's balance is reduced and the tokens are streamed out linearly over the following 7 days
+- Claiming from the stream is done with the 4626 withdrawal or redemption functions
+- A user that unstakes while having another unstaking stream active will have their previous one overwritten, with any unclaimed amount added to the new stream
+- Stakers accrue internal voting weight over time, linearly increasing from zero to an amount equal to their balance during a period of 8 weeks. This is done by storing the effective timestamp at which the user started staking
+- The internal vote weight can be calculated as `vote_weight = balance * staking_time / (8 weeks)`
+- The time staked is calculated as `staking_time = min(now - start_timestamp, 8 weeks)`
+- The internal vote weight is snapshotted at the start of the week and exposed as external vote weight. The external vote weight is constant throughout the week
+- User has option to lock their staking balance for up to 8 weeks
+- Locking will immediately add a vote weight equal to the additional vote weight the user would have at unlock time, capped to the maximum weight, i.e. `staking_time += additional_lock_duration` (capped to 8 weeks). For example, a user depositing into the staking contract and locking for 4 weeks will receive half their max voting weight straight away and a user locking for 8 weeks will receive their full voting weight
+- A user with a lock cant unstake or transfer any of their staking balance until the lock expires
+- A user with a lock can still add to their staking balance through depositing or transferring, but the added balance will also become locked
+- The lock duration can only be reduced if the user has a zero staking balance
+- Upon staking or transfering to a user their new staking time is calculated as the average between their current staking time and their lock duration, weighted by the amounts: `new_staking_time = (min(previous_staking_time, 8 weeks) * previous_balance + lock_duration * additional_balance) / new_balance`
+- Upon transferring or unstaking a percentage of a users balance, their voting weight is reduced by that same percentage. For example, a user unstaking half their stake will lose half their voting weight
+- Management can set the reward contract
 
 ### StakingRewards
 
