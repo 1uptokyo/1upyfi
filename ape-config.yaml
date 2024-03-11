@@ -6,3 +6,6 @@ ethereum:
   default_network: mainnet-fork
   mainnet_fork:
     default_provider: foundry
+foundry:
+  request_timeout: 100
+  fork_request_timeout: 800
