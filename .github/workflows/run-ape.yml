@@ -30,4 +30,5 @@ jobs:
       - uses: ApeWorX/github-action@v2
         with:
             python-version: '3.10' # (optional)
+            ape-plugins-list: 'vyper foundry'
       - run: ape test -s
