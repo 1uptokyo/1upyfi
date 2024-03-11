@@ -25,6 +25,11 @@ geth:
       uri: https://RPC_URL
 ```
 
+Get an Etherscan [API key](https://etherscan.io/myapikey) and add the following line in your shell startup script (`~/.bashrc`, `~/.zshrc` etc), replacing `...` with the key:
+```sh
+export ETHERSCAN_API_KEY=...
+```
+
 #### Run tests
 ```sh
 ape test
