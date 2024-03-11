@@ -81,6 +81,7 @@ def __init__(_asset: address):
     @param _asset Underlying liquid locker
     """
     asset = _asset
+    self.management = msg.sender
 
 @external
 @view
@@ -302,7 +303,7 @@ def redeem(_shares: uint256, _receiver: address = msg.sender, _owner: address = 
     return _shares
 
 @external
-def lock(_duration: uint256) -> uint256:
+def lock(_duration: uint256 = max_value(uint256)) -> uint256:
     """
     @notice Lock all of caller's assets for a duration
     @param _duration Lock duration in seconds
@@ -363,6 +364,16 @@ def unstake(_assets: uint256):
 
 @external
 @view
+def streams(_account: address) -> (uint256, uint256, uint256):
+    """
+    @notice Get a user's stream details
+    @param _account User address
+    @return Tuple with stream start time, stream amount, claimed amount
+    """
+    return self._unpack(self.packed_streams[_account])
+
+@external
+@view
 def vote_weight(_account: address) -> uint256:
     """
     @notice Get account vote weight
@@ -384,7 +395,7 @@ def vote_weight(_account: address) -> uint256:
     if balance == 0:
         return 0
 
-    time = (block.timestamp / WEEK_LENGTH * WEEK_LENGTH) - time
+    time = block.timestamp / WEEK_LENGTH * WEEK_LENGTH - time
     return balance * min(time, RAMP_LENGTH) / RAMP_LENGTH
 
 @external
