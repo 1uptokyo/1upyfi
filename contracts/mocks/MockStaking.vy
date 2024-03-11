@@ -3,12 +3,17 @@
 from vyper.interfaces import ERC20
 implements: ERC20
 
+interface Rewards:
+    def report(_account: address, _balance: uint256): nonpayable
+
+rewards: Rewards
+
 totalSupply: public(uint256)
 balanceOf: public(HashMap[address, uint256])
 allowance: public(HashMap[address, HashMap[address, uint256]])
 
-name: public(constant(String[9])) = "MockToken"
-symbol: public(constant(String[4])) = "MOCK"
+name: public(constant(String[11])) = "MockStaking"
+symbol: public(constant(String[4])) = "MoSt"
 decimals: public(constant(uint8)) = 18
 
 event Transfer:
@@ -28,6 +33,9 @@ def __init__():
 @external
 def transfer(_to: address, _value: uint256) -> bool:
     assert _to != empty(address)
+    self.rewards.report(msg.sender, self.balanceOf[msg.sender])
+    self.rewards.report(_to, self.balanceOf[_to])
+
     self.balanceOf[msg.sender] -= _value
     self.balanceOf[_to] += _value
     log Transfer(msg.sender, _to, _value)
@@ -36,6 +44,9 @@ def transfer(_to: address, _value: uint256) -> bool:
 @external
 def transferFrom(_from: address, _to: address, _value: uint256) -> bool:
     assert _to != empty(address)
+    self.rewards.report(_from, self.balanceOf[_from])
+    self.rewards.report(_to, self.balanceOf[_to])
+
     self.allowance[_from][msg.sender] -= _value
     self.balanceOf[_from] -= _value
     self.balanceOf[_to] += _value
@@ -50,20 +61,20 @@ def approve(_spender: address, _value: uint256) -> bool:
 
 @external
 def mint(_account: address, _value: uint256):
+    self.rewards.report(_account, self.balanceOf[_account])
+
     self.totalSupply += _value
     self.balanceOf[_account] += _value
     log Transfer(empty(address), _account, _value)
 
 @external
 def burn(_account: address, _value: uint256):
+    self.rewards.report(_account, self.balanceOf[_account])
+
     self.totalSupply -= _value
     self.balanceOf[_account] -= _value
     log Transfer(_account, empty(address), _value)
 
 @external
-def setRecipient(_recipient: address):
-    pass
-
-@external
-def getReward(_account: address):
-    pass
+def set_rewards(_rewards: address):
+    self.rewards = Rewards(_rewards)

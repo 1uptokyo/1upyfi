@@ -2,6 +2,8 @@ from ape import reverts
 from pytest import fixture
 from _constants import *
 
+YGAUGE_DISABLED = '0x0000000000000000000000000000000000000001'
+
 @fixture
 def registrar(accounts):
     return accounts[3]
@@ -28,11 +30,15 @@ def test_register(registrar, registry, ygauge, gauge):
     with reverts():
         registry.gauges(0)
     assert registry.gauge_map(ygauge) == ZERO_ADDRESS
+    assert not registry.ygauge_registered(ygauge)
+    assert not registry.gauge_registered(gauge)
     assert registry.register(gauge, sender=registrar).return_value == 0
     assert registry.num_gauges() == 1
     assert registry.ygauges(0) == ygauge
     assert registry.gauges(0) == gauge
     assert registry.gauge_map(ygauge) == gauge
+    assert registry.ygauge_registered(ygauge)
+    assert registry.gauge_registered(gauge)
 
 def test_register_permission(deployer, registry, gauge):
     # only registrar can register a gauge
@@ -65,6 +71,10 @@ def test_deregister(project, deployer, registrar, registry, ygauge, gauge):
     assert registry.gauges(1) == gauge2
     assert registry.gauge_map(ygauge) == gauge
     assert registry.gauge_map(ygauge2) == gauge2
+    assert registry.ygauge_registered(ygauge)
+    assert registry.gauge_registered(gauge)
+    assert registry.ygauge_registered(ygauge2)
+    assert registry.gauge_registered(gauge2)
     registry.deregister(gauge, 0, sender=deployer)
     assert registry.num_gauges() == 1
     assert registry.ygauges(0) == ygauge2
@@ -73,6 +83,10 @@ def test_deregister(project, deployer, registrar, registry, ygauge, gauge):
     with reverts():
         registry.gauges(1)
     assert registry.gauge_map(ygauge) == ZERO_ADDRESS
+    assert not registry.ygauge_registered(ygauge)
+    assert not registry.gauge_registered(gauge)
+    assert registry.ygauge_registered(ygauge2)
+    assert registry.gauge_registered(gauge2)
 
 def test_deregister_last(project, deployer, registrar, registry, ygauge, gauge):
     # deregister last registered gauge - update array correctly
@@ -118,6 +132,49 @@ def test_deregister_idx(project, deployer, registrar, registry, gauge):
     registry.register(gauge2, sender=registrar)
     with reverts():
         registry.deregister(gauge, 1, sender=deployer)
+
+def test_disable(deployer, registry, ygauge):
+    # ygauges can be disabled
+    assert not registry.disabled(ygauge)
+    assert registry.gauge_map(ygauge) == ZERO_ADDRESS
+    registry.disable(ygauge, True, sender=deployer)
+    assert registry.disabled(ygauge)
+    assert registry.gauge_map(ygauge) == YGAUGE_DISABLED
+    assert not registry.ygauge_registered(ygauge)
+
+def test_disable_permission(alice, registry, ygauge):
+    # only management can disable ygauges
+    with reverts():
+        registry.disable(ygauge, True, sender=alice)
+
+def test_disable_registered(deployer, registrar, registry, ygauge, gauge):
+    # cant disable a ygauge that is already registered
+    registry.register(gauge, sender=registrar)
+    with reverts():
+        registry.disable(ygauge, True, sender=deployer)
+
+def test_disable_register(deployer, registrar, registry, ygauge, gauge):
+    # cant register a gauge with a disabled ygauge
+    registry.disable(ygauge, True, sender=deployer)
+    with reverts():
+        registry.register(gauge, sender=registrar)
+
+def test_enable(deployer, registry, ygauge):
+    # ygauges can be re-enabled
+    registry.disable(ygauge, True, sender=deployer)
+    registry.disable(ygauge, False, sender=deployer)
+    assert not registry.disabled(ygauge)
+    assert registry.gauge_map(ygauge) == ZERO_ADDRESS
+    assert not registry.ygauge_registered(ygauge)
+
+def test_enable_register(deployer, registrar, registry, ygauge, gauge):
+    # re-enabled ygauges can be registered
+    registry.disable(ygauge, True, sender=deployer)
+    registry.disable(ygauge, False, sender=deployer)
+    registry.register(gauge, sender=registrar)
+    assert registry.gauge_map(ygauge) == gauge
+    assert registry.gauge_registered(gauge)
+    assert registry.ygauge_registered(ygauge)
 
 def test_set_registrar(deployer, alice, registrar, registry):
     # set new registrar address

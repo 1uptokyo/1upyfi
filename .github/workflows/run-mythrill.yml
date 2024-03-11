@@ -1,0 +1,67 @@
+name: run-mythrill
+
+permissions:
+  actions: read
+  contents: read
+  security-events: write
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [ "*" ]
+
+env:
+  FOUNDRY_PROFILE: ci
+
+jobs:
+  check:
+    strategy:
+      fail-fast: true
+
+    name: Foundry project
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+      
+      - name: Install Forge Dependencies
+        run: |
+          forge install foundry-rs/forge-std --no-commit
+          forge install openzeppelin/openzeppelin-contracts --no-commit
+          forge install joejordan/foundry-random --no-commit
+        id: install
+
+      - name: Run Forge build
+        run: |
+          forge --version
+          forge build --sizes
+        id: build
+
+      - name: Run Mythril Dependencies
+        run: |
+          sudo apt install libssl-dev python3-dev python3-pip
+        id: mythril_deps
+
+      - name: Install Mythril
+        id: install_mythril
+        run: |
+          pip3 install mythril
+          myth version
+
+      - name: Set Solc Version
+        id: solc
+        run: |
+          # brew install solc-select
+          # solc-select install 0.8.20
+          export SOLC_VERSION=0.8.20
+
+      - name: Run Mythril
+        id: mythril
+        run: |
+          myth a ./src/**.sol --solc-json ./mythril.config.json

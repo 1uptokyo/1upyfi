@@ -3,6 +3,7 @@ plugins:
   - name: vyper
   - name: foundry
   - name: alchemy
+  - name: etherscan
 ethereum:
   default_network: mainnet-fork
   mainnet_fork:

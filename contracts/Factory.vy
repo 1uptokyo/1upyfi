@@ -1,4 +1,12 @@
 # @version 0.3.10
+"""
+@title Gauge registry
+@author 1up
+@license GNU AGPLv3
+@notice
+    Permissionless deployment of gauges from the Yearn registry.
+    Deployed gauges are immediately added to the registry.
+"""
 
 interface YearnRegistry:
     def registered(_ygauge: address) -> bool: view
@@ -30,6 +38,14 @@ event SetManagement:
 
 @external
 def __init__(_yearn_registry: address, _reward_token: address, _proxy: address, _registry: address, _rewards: address):
+    """
+    @notice Constructor
+    @param _yearn_registry Yearn registry address
+    @param _reward_token Reward token
+    @param _proxy Proxy
+    @param _registry Registry
+    @param _rewards Gauge rewards contract
+    """
     yearn_registry = YearnRegistry(_yearn_registry)
     reward_token = _reward_token
     proxy = _proxy
@@ -39,6 +55,12 @@ def __init__(_yearn_registry: address, _reward_token: address, _proxy: address, 
 
 @external
 def deploy_gauge(_ygauge: address) -> address:
+    """
+    @notice Deploy a new gauge for a Yearn gauge using the current blueprint
+    @param _ygauge The yearn gauge
+    @return New gauge address
+    @dev Calls registry to register gauge
+    """
     assert yearn_registry.registered(_ygauge)
     blueprint: address = self.gauge_blueprint
     assert blueprint != empty(address)
@@ -57,6 +79,11 @@ def deploy_gauge(_ygauge: address) -> address:
 
 @external
 def set_gauge_blueprint(_blueprint: address):
+    """
+    @notice Set a new gauge blueprint
+    @param _blueprint Gauge blueprint address
+    @dev Can only be called by management
+    """
     assert msg.sender == self.management
     assert _blueprint != empty(address)
     self.gauge_blueprint = _blueprint

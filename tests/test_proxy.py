@@ -2,7 +2,7 @@ from ape import reverts
 from _constants import *
 
 MESSAGE_HASH = '0x0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF'
-EIP1271_MAGIC_VALUE = 0x1626ba7e
+EIP1271_MAGIC_VALUE = bytes.fromhex('1626ba7e')
 
 def test_proxy_call(project, deployer, alice, proxy):
     # operator can call any contract through the proxy

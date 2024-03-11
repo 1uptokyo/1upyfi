@@ -1,4 +1,13 @@
 # @version 0.3.10
+"""
+@title Gauge registry
+@author 1up
+@license GNU AGPLv3
+@notice
+    Tracks the registered protocol gauges and the underlying Yearn gauges.
+    A Yearn gauge can have at most one protocol gauge in the registry.
+    Intended to be a proxy operator.
+"""
 
 interface Registry:
     def num_gauges() -> uint256: view
@@ -19,8 +28,11 @@ pending_management: public(address)
 registrar: public(address)
 
 num_gauges: public(uint256)
-ygauges: public(address[99999])
+ygauges: public(address[MAX_NUM_GAUGES])
 gauge_map: public(HashMap[address, address]) # ygauge => gauge
+
+MAX_NUM_GAUGES: constant(uint256) = 99999
+YGAUGE_DISABLED: constant(address) = 0x0000000000000000000000000000000000000001
 
 event Register:
     gauge: indexed(address)
@@ -30,7 +42,15 @@ event Register:
 event Deregister:
     gauge: indexed(address)
     ygauge: indexed(address)
-    idx: uint256
+    idx: indexed(uint256)
+
+event NewIndex:
+    old_idx: indexed(uint256)
+    new_idx: uint256
+
+event Disable:
+    ygauge: indexed(address)
+    disabled: bool
 
 event SetRegistrar:
     registrar: address
@@ -43,6 +63,10 @@ event SetManagement:
 
 @external
 def __init__(_proxy: address):
+    """
+    @notice Constructor
+    @param _proxy Proxy
+    """
     proxy = Proxy(_proxy)
     self.management = msg.sender
     self.registrar = msg.sender
@@ -50,19 +74,54 @@ def __init__(_proxy: address):
 @external
 @view
 def gauges(_idx: uint256) -> address:
+    """
+    @notice Get the gauge at a certain index
+    @param _idx Index of the gauge
+    @return Gauge address
+    """
     assert _idx < self.num_gauges
     ygauge: address = self.ygauges[_idx]
     assert ygauge != empty(address)
     return self.gauge_map[ygauge]
 
 @external
+@view
+def gauge_registered(_gauge: address) -> bool:
+    """
+    @notice Check whether a gauge is registered or not
+    @param _gauge Gauge address
+    @return True: gauge is registered, False: gauge is not registered
+    """
+    ygauge: address = Gauge(_gauge).asset()
+    return self.gauge_map[ygauge] == _gauge
+
+@external
+@view
+def ygauge_registered(_ygauge: address) -> bool:
+    """
+    @notice Check whether a Yearn gauge is registered or not
+    @param _ygauge Yearn gauge address
+    @return True: Yearn gauge is registered, False: Yearn gauge is not registered
+    """
+    gauge: address = self.gauge_map[_ygauge]
+    return gauge != empty(address) and gauge != YGAUGE_DISABLED
+
+@external
 def register(_gauge: address) -> uint256:
+    """
+    @notice Register a gauge
+    @param _gauge Gauge address
+    @return Index of the newly registered gauge
+    @dev Can only be called by the registrar
+    @dev The underlying Yearn gauge cannot already be in the registry
+    """
     assert msg.sender == self.registrar
     ygauge: address = Gauge(_gauge).asset()
     assert ygauge != empty(address)
     assert self.gauge_map[ygauge] == empty(address)
 
     idx: uint256 = self.num_gauges
+    assert idx < MAX_NUM_GAUGES
     self.num_gauges = idx + 1
     self.ygauges[idx] = ygauge
     self.gauge_map[ygauge] = _gauge
@@ -80,6 +139,12 @@ def register(_gauge: address) -> uint256:
 
 @external
 def deregister(_gauge: address, _idx: uint256):
+    """
+    @notice Deregister a gauge
+    @param _gauge Gauge address
+    @param _idx Gauge index
+    @dev Can only be called by management
+    """
     assert msg.sender == self.management
     ygauge: address = Gauge(_gauge).asset()
     assert self.gauge_map[ygauge] == _gauge
@@ -89,14 +154,48 @@ def deregister(_gauge: address, _idx: uint256):
     # and shorten array by one
     max_idx: uint256 = self.num_gauges - 1
     self.num_gauges = max_idx
+    log Deregister(_gauge, ygauge, _idx)
     if _idx != max_idx:
         self.ygauges[_idx] = self.ygauges[max_idx]
+        log NewIndex(max_idx, _idx)
     self.ygauges[max_idx] = empty(address)
     self.gauge_map[ygauge] = empty(address)
-    log Deregister(_gauge, ygauge, _idx)
+
+@external
+@view
+def disabled(_ygauge: address) -> bool:
+    """
+    @notice Check whether a Yearn gauge is disabled or not
+    @param _ygauge Yearn gauge address
+    @return True: disabled, False: enabled
+    """
+    return self.gauge_map[_ygauge] == YGAUGE_DISABLED
+
+@external
+def disable(_ygauge: address, _disabled: bool):
+    """
+    @notice Disable a Yearn gauge, preventing it from being registered
+    @param _ygauge Yearn gauge address
+    @param _disabled True: disabled, False: enabled
+    @dev Can only be called by management
+    """
+    assert msg.sender == self.management
+    assert _ygauge != empty(address)
+    if _disabled:
+        assert self.gauge_map[_ygauge] == empty(address)
+        self.gauge_map[_ygauge] = YGAUGE_DISABLED
+    else:
+        assert self.gauge_map[_ygauge] == YGAUGE_DISABLED
+        self.gauge_map[_ygauge] = empty(address)
+    log Disable(_ygauge, _disabled)
 
 @external
 def set_registrar(_registrar: address):
+    """
+    @notice Set new registrar
+    @param _registrar Registrar
+    @dev Can only be called by management
+    """
     assert msg.sender == self.management
     self.registrar = _registrar
     log SetRegistrar(_registrar)

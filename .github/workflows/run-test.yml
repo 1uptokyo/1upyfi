@@ -1,0 +1,63 @@
+name: run-test
+
+on:
+  pull_request:
+    branches: [ "*" ]
+
+env:
+  FOUNDRY_PROFILE: ci
+  ETH_MAINNET_RPC_URL: ${{ secrets.ETH_MAINNET_RPC_URL}}
+  BSC_MAINNET_RPC_URL: ${{ secrets.BSC_MAINNET_RPC_URL}}
+  MATIC_MAINNET_RPC_URL: ${{ secrets.MATIC_MAINNET_RPC_URL}}
+  ARB_MAINNET_RPC_URL: ${{ secrets.ARB_MAINNET_RPC_URL}}
+  OP_MAINNET_RPC_URL: ${{ secrets.OP_MAINNET_RPC_URL}}
+  AVAX_MAINNET_RPC_URL: ${{ secrets.AVAX_MAINNET_RPC_URL}}
+  FTM_MAINNET_RPC_URL: ${{ secrets.FTM_MAINNET_RPC_URL}}
+  BASE_MAINNET_RPC_URL: ${{ secrets.BASE_MAINNET_RPC_URL}}
+  ZKSYNC_MAINNET_RPC_URL: ${{ secrets.ZKSYNC_MAINNET_RPC_URL}}
+
+jobs:
+  check:
+    strategy:
+      fail-fast: true
+
+    name: Foundry project
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+
+      - name: Install Vyper
+        run: pip install vyper==0.3.10
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+
+      - name: Install Forge Dependencies
+        run: |
+          forge install foundry-rs/forge-std --no-commit
+          forge install openzeppelin/openzeppelin-contracts --no-commit
+          forge install joejordan/foundry-random --no-commit
+        id: install
+
+      - name: Run Forge build
+        run: |
+          forge --version
+          forge build --sizes
+        id: build
+
+      - name: Run Forge tests
+        run: |
+          forge test -vvv
+        id: test
+
+      - name: Run Forge Coverage
+        run: |
+          forge coverage
+        id: coverage
