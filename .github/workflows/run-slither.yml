@@ -69,6 +69,9 @@ jobs:
       - name: Install Vyper
         run: pip install vyper==0.3.10
 
+      - name: Check Vyper Version
+        run: vyper --version
+
       # See more info at https://github.com/crytic/slither-action/tree/v0.3.1/
       - name: Run Slither
         uses: crytic/slither-action@v0.3.1
@@ -77,5 +80,5 @@ jobs:
           fail-on: all # Required to avoid failing the CI run regardless of findings.
           # slither-args: --filter-paths "./script|./lib|./test" --exclude naming-convention,solc-version
           # slither-config: ./slither.config.json
-          target: 'contracts/'
+          target: './contracts'
           solc-version: '0.8.20'
