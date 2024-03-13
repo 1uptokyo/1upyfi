@@ -39,29 +39,29 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Install Foundry
-        uses: foundry-rs/foundry-toolchain@v1
-        with:
-          version: nightly
+      # - name: Install Foundry
+      #   uses: foundry-rs/foundry-toolchain@v1
+      #   with:
+      #     version: nightly
       
-      - name: Install Forge Dependencies
-        run: |
-          forge install foundry-rs/forge-std --no-commit
-          forge install openzeppelin/openzeppelin-contracts --no-commit
-          forge install joejordan/foundry-random --no-commit
-        id: install
+      # - name: Install Forge Dependencies
+      #   run: |
+      #     forge install foundry-rs/forge-std --no-commit
+      #     forge install openzeppelin/openzeppelin-contracts --no-commit
+      #     forge install joejordan/foundry-random --no-commit
+      #   id: install
 
-      - name: Run Forge build
-        run: |
-          forge --version
-          forge build --sizes
-        id: build
+      # - name: Run Forge build
+      #   run: |
+      #     forge --version
+      #     forge build --sizes
+      #   id: build
 
-      - uses: ApeWorX/github-action@v2.7
-        with:
-            python-version: '3.10' # (optional)
-            ape-plugins-list: 'vyper foundry alchemy etherscan'
-      - run: ape compile -s -v DEBUG
+      # - uses: ApeWorX/github-action@v2.7
+      #   with:
+      #       python-version: '3.10' # (optional)
+      #       ape-plugins-list: 'vyper foundry alchemy etherscan'
+      # - run: ape compile -s -v DEBUG
 
       - name: Setup Python
         uses: actions/setup-python@v5
