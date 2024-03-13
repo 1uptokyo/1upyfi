@@ -166,7 +166,7 @@ def harvest(_gauges: DynArray[address, 32], _amounts: DynArray[uint256, 32], _re
     @return Amount of rewards sent as harvest bounty
     """
     assert len(_gauges) == len(_amounts)
-    fee_rate: uint256 = (self.packed_fees >> 128) & FEE_MASK
+    fee_rate: uint256 = self._fee_rate(HARVEST_FEE_IDX)
     total_fees: uint256 = 0
     for i in range(32):
         if i == len(_gauges):
