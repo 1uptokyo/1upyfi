@@ -63,7 +63,13 @@ jobs:
             ape-plugins-list: 'vyper foundry alchemy etherscan'
       - run: ape compile -s -v DEBUG
 
-      # See more info at https://github.com/crytic/slither-action/tree/v0.3.0/
+      - name: Setup Python
+        uses: actions/setup-python@v5
+
+      - name: Install Vyper
+        run: pip install vyper==0.3.10
+
+      # See more info at https://github.com/crytic/slither-action/tree/v0.3.1/
       - name: Run Slither
         uses: crytic/slither-action@v0.3.1
         id: slither
