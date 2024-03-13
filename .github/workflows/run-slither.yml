@@ -80,5 +80,5 @@ jobs:
           fail-on: all # Required to avoid failing the CI run regardless of findings.
           # slither-args: --filter-paths "./script|./lib|./test" --exclude naming-convention,solc-version
           # slither-config: ./slither.config.json
-          target: './contracts'
+          # target: 'contracts/'
           solc-version: '0.8.20'
