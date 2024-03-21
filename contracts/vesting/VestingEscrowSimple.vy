@@ -30,6 +30,14 @@ event Disowned:
 event SetOpenClaim:
     state: bool
 
+event SetSignedMessage:
+    hash: indexed(bytes32)
+    signed: bool
+
+event SetOperator:
+    operator: indexed(address)
+    flag: bool
+
 
 recipient: public(address)
 token: public(ERC20)
@@ -44,6 +52,11 @@ initialized: public(bool)
 
 owner: public(address)
 
+# 1UP specific state
+operators: public(HashMap[address, bool])
+messages: public(HashMap[bytes32, bool])
+
+EIP1271_MAGIC_VALUE: constant(bytes4) = 0x1626ba7e
 
 @external
 def __init__():
@@ -212,3 +225,59 @@ def collect_dust(token: ERC20, beneficiary: address = msg.sender):
         amount = amount + self.total_claimed - self._total_vested_at(self.disabled_at)
 
     assert token.transfer(beneficiary, amount, default_return_value=True)
+
+
+# 1UP specific functions
+
+@external
+def set_signed_message(_hash: bytes32, _signed: bool):
+    """
+    @notice Mark a message as signed
+    @param _hash Message hash
+    @param _signed True: signed, False; not signed
+    @dev Can only be called by operators
+    """
+    assert msg.sender == self.recipient
+    assert _hash != empty(bytes32)
+    self.messages[_hash] = _signed
+    log SetSignedMessage(_hash, _signed)
+
+
+@external
+def set_operator(_operator: address, _flag: bool):
+    """
+    @notice Add or remove an operator
+    @param _operator Operator
+    @param _flag True: operator, False: not operator
+    @dev Can only be called by management
+    """
+    assert msg.sender == self.owner
+    assert _operator != empty(address)
+    self.operators[_operator] = _flag
+    log SetOperator(_operator, _flag)
+
+
+@external
+@view
+def isValidSignature(_hash: bytes32, _signature: Bytes[128]) -> bytes4:
+    """
+    @notice Check whether a message should be considered as signed
+    @param _hash Hash of message
+    @param _signature Signature, unused
+    @return EIP-1271 magic value
+    """
+    assert self.messages[_hash]
+    return EIP1271_MAGIC_VALUE
+
+
+@external
+@payable
+def call(_target: address, _data: Bytes[2048]):
+    """
+    @notice Call another contract through the escrow contract
+    @param _target Contract to call
+    @param _data Calldata
+    @dev Can only be called by operators
+    """
+    assert self.operators[msg.sender]
+    raw_call(_target, _data, value=msg.value)
