@@ -34,6 +34,10 @@ event SetSignedMessage:
     hash: indexed(bytes32)
     signed: bool
 
+event ApproveOperator:
+    operator: indexed(address)
+    flag: bool
+
 event SetOperator:
     operator: indexed(address)
     flag: bool
@@ -53,6 +57,7 @@ initialized: public(bool)
 owner: public(address)
 
 # 1UP specific state
+approved_operators: public(HashMap[address, bool])
 operators: public(HashMap[address, bool])
 messages: public(HashMap[bytes32, bool])
 
@@ -242,6 +247,19 @@ def set_signed_message(_hash: bytes32, _signed: bool):
     self.messages[_hash] = _signed
     log SetSignedMessage(_hash, _signed)
 
+@external
+def approve_operator(_operator: address, _flag: bool):
+    """
+    @notice Add or remove an approved operator
+    @param _operator Operator
+    @param _flag True: approved operator, False: not approved operator
+    @dev Can only be called by owner
+    """
+    assert msg.sender == self.owner
+    assert _operator != empty(address)
+    self.approved_operators[_operator] = _flag
+    log ApproveOperator(_operator, _flag)
+
 
 @external
 def set_operator(_operator: address, _flag: bool):
@@ -249,10 +267,12 @@ def set_operator(_operator: address, _flag: bool):
     @notice Add or remove an operator
     @param _operator Operator
     @param _flag True: operator, False: not operator
-    @dev Can only be called by management
+    @dev Can only be called by recipient
     """
-    assert msg.sender == self.owner
+    assert msg.sender == self.recipient
     assert _operator != empty(address)
+    if _flag:
+        assert self.approved_operators[_operator]
     self.operators[_operator] = _flag
     log SetOperator(_operator, _flag)
 
