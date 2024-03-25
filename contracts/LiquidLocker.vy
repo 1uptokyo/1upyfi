@@ -58,21 +58,25 @@ def __init__(_token: address, _voting_escrow: address, _proxy: address):
     log Transfer(empty(address), msg.sender, 0)
 
 @external
-def deposit(_amount: uint256, _receiver: address = msg.sender):
+def deposit(_amount: uint256, _receiver: address = msg.sender) -> uint256:
     """
     @notice Deposit tokens into the protocol's ve position and mint liquid locker tokens
     @param _amount Amount of tokens to add to the lock
-    @param _receiver Receiver of newly minted liquid locker tokens
+    @param _receiver Recipient of newly minted liquid locker tokens
+    @return Amount of tokens minted to the recipient
     """
-    self._mint(_amount * SCALE, _receiver)
+    minted: uint256 = _amount * SCALE
+    self._mint(minted, _receiver)
     assert token.transferFrom(msg.sender, proxy.address, _amount, default_return_value=True)
     proxy.modify_lock(_amount, block.timestamp + LOCK_TIME)
+    return minted
 
 @external
 def mint(_receiver: address = msg.sender) -> uint256:
     """
     @notice Mint liquid locker tokens for any new tokens in the ve lock
     @param _receiver Receiver of newly minted liquid locker tokens
+    @return Amount of tokens minted to the recipient
     """
     excess: uint256 = voting_escrow.locked(proxy.address) * SCALE - self.totalSupply
     self._mint(excess, _receiver)
