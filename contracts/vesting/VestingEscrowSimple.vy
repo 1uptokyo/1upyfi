@@ -11,6 +11,9 @@
 from vyper.interfaces import ERC20
 
 
+interface Factory:
+    def operators(_token: address, _operator: address) -> bool: view
+
 event Claim:
     recipient: indexed(address)
     claimed: uint256
@@ -42,7 +45,7 @@ event SetOperator:
     operator: indexed(address)
     flag: bool
 
-
+factory: public(Factory)
 recipient: public(address)
 token: public(ERC20)
 start_time: public(uint256)
@@ -96,7 +99,7 @@ def initialize(
     """
     assert not self.initialized  # dev: can only initialize once
     self.initialized = True
-
+    self.factory = Factory(msg.sender)
     self.token = token
     self.owner = owner
     self.start_time = start_time
@@ -248,20 +251,6 @@ def set_signed_message(_hash: bytes32, _signed: bool):
     log SetSignedMessage(_hash, _signed)
 
 @external
-def approve_operator(_operator: address, _flag: bool):
-    """
-    @notice Add or remove an approved operator
-    @param _operator Operator
-    @param _flag True: approved operator, False: not approved operator
-    @dev Can only be called by owner
-    """
-    assert msg.sender == self.owner
-    assert _operator != empty(address)
-    self.approved_operators[_operator] = _flag
-    log ApproveOperator(_operator, _flag)
-
-
-@external
 def set_operator(_operator: address, _flag: bool):
     """
     @notice Add or remove an operator
@@ -272,7 +261,7 @@ def set_operator(_operator: address, _flag: bool):
     assert msg.sender == self.recipient
     assert _operator != empty(address)
     if _flag:
-        assert self.approved_operators[_operator]
+        assert self.factory.operators(self.token.address, _operator)
     self.operators[_operator] = _flag
     log SetOperator(_operator, _flag)
 
