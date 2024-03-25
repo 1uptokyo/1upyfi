@@ -60,7 +60,6 @@ initialized: public(bool)
 owner: public(address)
 
 # 1UP specific state
-approved_operators: public(HashMap[address, bool])
 operators: public(HashMap[address, bool])
 messages: public(HashMap[bytes32, bool])
 
