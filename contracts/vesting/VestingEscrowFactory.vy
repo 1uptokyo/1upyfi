@@ -16,7 +16,6 @@ struct Vest:
     start: uint256
     cliff: uint256
 
-owner: public(address)
 num_vests: public(uint256)
 pending_vests: public(HashMap[uint256, Vest])
 liquid_lockers: public(HashMap[address, address]) # liquid locker token => deposit contract
@@ -47,18 +46,29 @@ event VestingEscrowCreated:
     cliff_length: uint256
 
 event VestingContractDeployed:
-    recpient: indexed(address)
+    recipient: indexed(address)
     token: indexed(address)
+    index: uint256
     escrow: address
     yfi_amount: uint256
     token_amount: uint256
 
+event LiquidLockerSet:
+    liquid_locker: indexed(address)
+    depositor: address
+
+event OperatorSet:
+    liquid_locker: indexed(address)
+    operator: indexed(address)
+    flag: bool
+
 TARGET: public(immutable(address))
 YFI: public(immutable(ERC20))
+OWNER: public(immutable(address))
 
 
 @external
-def __init__(target: address, yfi: address):
+def __init__(target: address, yfi: address, owner: address):
     """
     @notice Contract constructor
     @dev Prior to deployment you must deploy one copy of `VestingEscrowSimple` which
@@ -67,7 +77,7 @@ def __init__(target: address, yfi: address):
     """
     TARGET = target
     YFI = ERC20(yfi)
-    self.owner = msg.sender
+    OWNER = owner
 
 @external
 def create_vest(
@@ -90,7 +100,7 @@ def create_vest(
     assert cliff_length <= vesting_duration  # dev: incorrect vesting cliff
     assert vesting_start + vesting_duration > block.timestamp  # dev: just use a transfer, dummy
     assert vesting_duration > 0  # dev: duration must be > 0
-    assert recipient not in [self, empty(address), YFI.address, self.owner] # dev: wrong recipient
+    assert recipient not in [self, empty(address), YFI.address, OWNER] # dev: wrong recipient
 
     idx: uint256 = self.num_vests
     self.num_vests = idx + 1
@@ -136,7 +146,7 @@ def deploy_vesting_contract(
 
     escrow: address = create_minimal_proxy_to(TARGET)
     VestingEscrowSimple(escrow).initialize(
-        self.owner,
+        OWNER,
         token,
         msg.sender,
         ll_amount,
@@ -149,8 +159,23 @@ def deploy_vesting_contract(
     log VestingContractDeployed(
         msg.sender,
         token,
+        idx,
         escrow,
         amount,
         ll_amount,
     )
     return escrow, ll_amount
+
+@external
+def set_liquid_locker(liquid_locker: address, depositor: address):
+    assert msg.sender == OWNER
+    assert liquid_locker != empty(address)
+    self.liquid_lockers[liquid_locker] = depositor
+    log LiquidLockerSet(liquid_locker, depositor)
+
+@external
+def set_operator(liquid_locker: address, operator: address, flag: bool):
+    assert msg.sender == OWNER
+    assert liquid_locker != empty(address) and operator != empty(address)
+    self.operators[liquid_locker][operator] = flag
+    log OperatorSet(liquid_locker, operator, flag)

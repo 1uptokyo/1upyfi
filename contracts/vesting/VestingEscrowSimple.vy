@@ -37,10 +37,6 @@ event SetSignedMessage:
     hash: indexed(bytes32)
     signed: bool
 
-event ApproveOperator:
-    operator: indexed(address)
-    flag: bool
-
 event SetOperator:
     operator: indexed(address)
     flag: bool
@@ -234,7 +230,7 @@ def collect_dust(token: ERC20, beneficiary: address = msg.sender):
     assert token.transfer(beneficiary, amount, default_return_value=True)
 
 
-# 1UP specific functions
+# Liquid locker specific functions
 
 @external
 def set_signed_message(_hash: bytes32, _signed: bool):
@@ -248,6 +244,7 @@ def set_signed_message(_hash: bytes32, _signed: bool):
     assert _hash != empty(bytes32)
     self.messages[_hash] = _signed
     log SetSignedMessage(_hash, _signed)
+
 
 @external
 def set_operator(_operator: address, _flag: bool):
