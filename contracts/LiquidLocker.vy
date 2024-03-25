@@ -76,6 +76,7 @@ def mint(_receiver: address = msg.sender) -> uint256:
     """
     @notice Mint liquid locker tokens for any new tokens in the ve lock
     @param _receiver Receiver of newly minted liquid locker tokens
+    @return Amount of tokens minted to the recipient
     """
     excess: uint256 = voting_escrow.locked(proxy.address) * SCALE - self.totalSupply
     self._mint(excess, _receiver)
