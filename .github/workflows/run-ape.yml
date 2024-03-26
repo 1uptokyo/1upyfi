@@ -1,6 +1,12 @@
-name: run-test
+name: run-ape
+
+permissions:
+  actions: read
+  contents: read
+  security-events: write
 
 on:
+  workflow_dispatch:
   pull_request:
     branches: [ "*" ]
 
@@ -16,6 +22,7 @@ env:
   BASE_MAINNET_RPC_URL: ${{ secrets.BASE_MAINNET_RPC_URL}}
   ZKSYNC_MAINNET_RPC_URL: ${{ secrets.ZKSYNC_MAINNET_RPC_URL}}
   WEB3_ALCHEMY_API_KEY: ${{ secrets.WEB3_ALCHEMY_API_KEY}}
+  ETHERSCAN_API_KEY: ${{ secrets.ETHERSCAN_TOKEN }}
 
 jobs:
   check:
@@ -24,41 +31,25 @@ jobs:
 
     name: Foundry project
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-
-      - name: Install Vyper
-        run: pip install vyper==0.3.10
-
-      - name: Install Foundry
-        uses: foundry-rs/foundry-toolchain@v1
+      - uses: foundry-rs/foundry-toolchain@v1
+        name: Install Foundry
         with:
           version: nightly
-
       - name: Install Forge Dependencies
         run: |
           forge install foundry-rs/forge-std --no-commit
           forge install openzeppelin/openzeppelin-contracts --no-commit
           forge install joejordan/foundry-random --no-commit
         id: install
-
-      - name: Run Forge build
-        run: |
-          forge --version
-          forge build --sizes
-        id: build
-
-      - name: Run Forge tests
-        run: |
-          forge test -vvv
-        id: test
-
-      - name: Run Forge Coverage
-        run: |
-          forge coverage
-        id: coverage
+      - uses: ApeWorX/github-action@v2.7
+        with:
+            python-version: '3.10' # (optional)
+            ape-plugins-list: 'vyper foundry alchemy etherscan'
+      - run: ape test -s

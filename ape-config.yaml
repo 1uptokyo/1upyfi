@@ -2,8 +2,16 @@ name: 1upyfi
 plugins:
   - name: vyper
   - name: foundry
+  - name: alchemy
   - name: etherscan
 ethereum:
   default_network: mainnet-fork
   mainnet_fork:
     default_provider: foundry
+foundry:
+  request_timeout: 100
+  fork_request_timeout: 800
+  fork:
+    ethereum:
+      mainnet:
+        upstream_provider: alchemy
