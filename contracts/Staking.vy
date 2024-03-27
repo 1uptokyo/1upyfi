@@ -17,7 +17,7 @@ implements: ERC20
 implements: ERC4626
 
 interface Rewards:
-    def report(_account: address, _balance: uint256): nonpayable
+    def report(_account: address, _amount: uint256, _supply: uint256): nonpayable
 
 asset: public(immutable(address))
 management: public(address)
@@ -352,8 +352,8 @@ def unstake(_assets: uint256):
     @dev Adds existing stream to new stream, if applicable
     """
     assert _assets > 0
-    self.totalSupply -= _assets
     self._update_balance(_assets, msg.sender, DECREMENT)
+    self.totalSupply -= _assets
 
     time: uint256 = 0
     total: uint256 = 0
@@ -439,8 +439,8 @@ def _deposit(_assets: uint256, _receiver: address):
     """
     @notice Update balance and transfer liquid locker tokens in
     """
-    self.totalSupply += _assets
     self._update_balance(_assets, _receiver, INCREMENT)
+    self.totalSupply += _assets
 
     assert ERC20(asset).transferFrom(msg.sender, self, _assets, default_return_value=True)
     log Deposit(msg.sender, _receiver, _assets, _assets)
@@ -492,7 +492,7 @@ def _withdraw(_assets: uint256, _receiver: address, _owner: address):
 @internal
 def _update_balance(_amount: uint256, _account: address, _increment: bool):
     """
-    @notice Update balance and time
+    @notice Update balance and time. Supply should be updated _after_ calling this function
     """
     lock_duration: uint256 = self.unlock_times[_account]
     if lock_duration > block.timestamp:
@@ -507,7 +507,7 @@ def _update_balance(_amount: uint256, _account: address, _increment: bool):
     week, time, balance = self._unpack(self.packed_balances[_account])
 
     # sync rewards
-    self.rewards.report(_account, balance)
+    self.rewards.report(_account, balance, self.totalSupply)
 
     if _increment == INCREMENT:
         if time > 0:

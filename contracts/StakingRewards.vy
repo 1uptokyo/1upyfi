@@ -19,7 +19,7 @@
 from vyper.interfaces import ERC20
 
 interface Rewards:
-    def report(_account: address, _amount: uint256): nonpayable
+    def report(_account: address, _amount: uint256, _supply: uint256): nonpayable
 implements: Rewards
 
 interface Redeemer:
@@ -35,6 +35,8 @@ redeemer: public(Redeemer)
 treasury: public(address)
 fee_rates: public(uint256[6])
 packed_integrals: public(uint256)
+packed_streaming: public(uint256) # updated | lt_amount | dt_amount
+packed_next: public(uint256)
 packed_account_integrals: public(HashMap[address, uint256])
 packed_pending_rewards: public(HashMap[address, uint256])
 packed_pending_fees: public(uint256)
@@ -73,6 +75,9 @@ event SetManagement:
 
 PRECISION: constant(uint256) = 10**18
 MASK: constant(uint256) = 2**128 - 1
+SMALL_MASK: constant(uint256) = 2**32 - 1
+BIG_MASK: constant(uint256) = 2**112 - 1
+WEEK_LENGTH: constant(uint256) = 7 * 24 * 60 * 60
 FEE_DENOMINATOR: constant(uint256) = 10_000
 
 HARVEST_FEE_IDX: constant(uint256)        = 0 # harvest
@@ -97,6 +102,7 @@ def __init__(_proxy: address, _staking: address, _locking_token: address, _disco
     discount_token = ERC20(_discount_token)
     self.management = msg.sender
     self.treasury = msg.sender
+    self.packed_streaming = self._pack_triplet(block.timestamp, 0, 0)
 
 @external
 @view
@@ -117,10 +123,47 @@ def claimable(_account: address) -> (uint256, uint256):
     @return Tuple with claimable locking token and discount token rewards
     """
     balance: uint256 = staking.balanceOf(_account)
+    supply: uint256 = staking.totalSupply()
 
+    current_week: uint256 = block.timestamp / WEEK_LENGTH
     lt_integral: uint256 = 0
     dt_integral: uint256 = 0
     lt_integral, dt_integral = self._unpack(self.packed_integrals)
+
+    updated: uint256 = 0
+    lt_streaming: uint256 = 0
+    dt_streaming: uint256 = 0
+    updated, lt_streaming, dt_streaming = self._unpack_triplet(self.packed_streaming)
+
+    if supply > 0 and updated < block.timestamp:
+        # update integrals
+        streaming_week: uint256 = updated / WEEK_LENGTH
+        if current_week > streaming_week:
+            # new week: unlock all streaming rewards
+            updated = current_week * WEEK_LENGTH
+            lt_integral += lt_streaming * PRECISION / supply
+            dt_integral += dt_streaming * PRECISION / supply
+
+            lt_next: uint256 = 0
+            dt_next: uint256 = 0
+            lt_next, dt_next = self._unpack(self.packed_next)
+
+            if current_week > streaming_week + 1:
+                # unlock all next rewards
+                lt_streaming = 0
+                dt_streaming = 0
+                lt_integral += lt_next * PRECISION / supply
+                dt_integral += dt_next * PRECISION / supply
+            else:
+                # next rewards start streaming
+                lt_streaming = lt_next
+                dt_streaming = dt_next
+
+        # update streams
+        remaining: uint256 = (current_week + 1) * WEEK_LENGTH - updated
+        passed: uint256 = block.timestamp - updated # guaranteed to be <= remaining
+        lt_integral += (lt_streaming * passed / remaining) * PRECISION / supply
+        dt_integral += (dt_streaming * passed / remaining) * PRECISION / supply
 
     lt_account_integral: uint256 = 0
     dt_account_integral: uint256 = 0
@@ -147,10 +190,11 @@ def claim(_receiver: address = msg.sender, _redeem_data: Bytes[256] = b"") -> (u
         Without redemption: tuple of locking token and discount token rewards
     """
     balance: uint256 = staking.balanceOf(msg.sender)
+    supply: uint256 = staking.totalSupply()
 
     lt_amount: uint256 = 0
     dt_amount: uint256 = 0
-    lt_amount, dt_amount = self._sync(msg.sender, balance)
+    lt_amount, dt_amount = self._sync_user(msg.sender, balance, supply)
 
     lt_pending_fees: uint256 = 0
     dt_pending_fees: uint256 = 0
@@ -227,28 +271,26 @@ def harvest(_lt_amount: uint256, _dt_amount: uint256, _receiver: address = msg.s
             dt_amount -= dt_fee
             assert discount_token.transfer(_receiver, dt_fee, default_return_value=True)
 
-    # update integrals
-    lt_integral: uint256 = 0
-    dt_integral: uint256 = 0
-    lt_integral, dt_integral = self._unpack(self.packed_integrals)
-
     supply: uint256 = staking.totalSupply()
     assert supply > 0
+    self._sync(supply)
 
-    lt_integral += lt_amount * PRECISION / supply
-    dt_integral += dt_amount * PRECISION / supply
-    self.packed_integrals = self._pack(lt_integral, dt_integral)
+    lt_next: uint256 = 0
+    dt_next: uint256 = 0
+    lt_next, dt_next = self._unpack(self.packed_next)
+    self.packed_next = self._pack(lt_next + lt_amount, dt_next + dt_amount)
     log Harvest(msg.sender, lt_amount, dt_amount, lt_fee, dt_fee)
 
 @external
-def report(_account: address, _balance: uint256):
+def report(_account: address, _balance: uint256, _supply: uint256):
     """
     @notice Report balance to sync reward integrals prior to a change
     @param _account Account
     @param _balance Balance before the change
+    @param _supply Supply before the change
     """
     assert msg.sender == staking.address
-    self._sync(_account, _balance)
+    self._sync_user(_account, _balance, _supply)
 
 @external
 @view
@@ -346,8 +388,74 @@ def accept_management():
     self.management = msg.sender
     log SetManagement(msg.sender)
 
+@external
+def sync():
+    """
+    @notice Sync global rewards. Updates rewards streams and integrals
+    """
+    self._sync(staking.totalSupply())
+
 @internal
-def _sync(_account: address, _balance: uint256) -> (uint256, uint256):
+def _sync(_supply: uint256) -> (uint256, uint256):
+    """
+    @notice Sync global rewards. Needs to be called before harvest and user sync
+    """
+    current_week: uint256 = block.timestamp / WEEK_LENGTH
+    lt_integral: uint256 = 0
+    dt_integral: uint256 = 0
+    lt_integral, dt_integral = self._unpack(self.packed_integrals)
+
+    updated: uint256 = 0
+    lt_streaming: uint256 = 0
+    dt_streaming: uint256 = 0
+    updated, lt_streaming, dt_streaming = self._unpack_triplet(self.packed_streaming)
+
+    if _supply == 0 or updated == block.timestamp:
+        # nothing staked or already up-to-date: do nothing
+        return lt_integral, dt_integral
+
+    streaming_week: uint256 = updated / WEEK_LENGTH
+    if current_week > streaming_week:
+        # new week: unlock all streaming rewards
+        updated = current_week * WEEK_LENGTH # beginnning of this week
+        lt_integral += lt_streaming * PRECISION / _supply
+        dt_integral += dt_streaming * PRECISION / _supply
+
+        lt_next: uint256 = 0
+        dt_next: uint256 = 0
+        lt_next, dt_next = self._unpack(self.packed_next)
+        self.packed_next = 0
+
+        if current_week > streaming_week + 1:
+            # unlock all next rewards
+            lt_streaming = 0
+            dt_streaming = 0
+            lt_integral += lt_next * PRECISION / _supply
+            dt_integral += dt_next * PRECISION / _supply
+        else:
+            # next rewards start streaming
+            lt_streaming = lt_next
+            dt_streaming = dt_next
+
+    # update streams
+    remaining: uint256 = (current_week + 1) * WEEK_LENGTH - updated # always <= WEEK_LENGTH
+    passed: uint256 = block.timestamp - updated # always <= remaining
+    unlocked: uint256 = 0
+
+    unlocked = lt_streaming * passed / remaining
+    lt_integral += unlocked * PRECISION / _supply
+    lt_streaming -= unlocked
+
+    unlocked = dt_streaming * passed / remaining
+    dt_integral += unlocked * PRECISION / _supply
+    dt_streaming -= unlocked
+
+    self.packed_streaming = self._pack_triplet(block.timestamp, lt_streaming, dt_streaming)
+    self.packed_integrals = self._pack(lt_integral, dt_integral)
+    return lt_integral, dt_integral
+
+@internal
+def _sync_user(_account: address, _balance: uint256, _supply: uint256) -> (uint256, uint256):
     """
     @notice Sync a user's rewards. Needs to be called before the balance is changed
     """
@@ -357,7 +465,7 @@ def _sync(_account: address, _balance: uint256) -> (uint256, uint256):
 
     lt_integral: uint256 = 0
     dt_integral: uint256 = 0
-    lt_integral, dt_integral = self._unpack(self.packed_integrals)
+    lt_integral, dt_integral = self._sync(_supply)
     if _balance == 0:
         # no rewards to be distributed, sync integrals only
         self.packed_account_integrals[_account] = self.packed_integrals
@@ -393,3 +501,20 @@ def _unpack(_packed: uint256) -> (uint256, uint256):
     @notice Unpack two values from two equally sized parts of a single slot
     """
     return _packed & MASK, _packed >> 128
+
+@internal
+@pure
+def _pack_triplet(_a: uint256, _b: uint256, _c: uint256) -> uint256:
+    """
+    @notice Pack a small value and two big values into a single storage slot
+    """
+    assert _a <= SMALL_MASK and _b <= BIG_MASK and _c <= BIG_MASK
+    return (_a << 224) | (_b << 112) | _c
+
+@internal
+@pure
+def _unpack_triplet(_packed: uint256) -> (uint256, uint256, uint256):
+    """
+    @notice Unpack a small value and two big values from a single storage slot
+    """
+    return _packed >> 224, (_packed >> 112) & BIG_MASK, _packed & BIG_MASK

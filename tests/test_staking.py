@@ -79,7 +79,7 @@ def test_deposit_excessive(deployer, alice, staking_token, staking):
     with reverts():
         staking.deposit(2 * UNIT, sender=alice)
 
-def test_deposit_report(deployer, alice, proxy, locking_token, discount_token, staking_token, staking, rewards):
+def test_deposit_report(chain, deployer, alice, proxy, locking_token, discount_token, staking_token, staking, rewards):
     # depositing reports previous balance, updating user's integral
     staking_token.mint(alice, 3 * UNIT, sender=deployer)
     staking_token.approve(staking, 3 * UNIT, sender=alice)
@@ -88,6 +88,8 @@ def test_deposit_report(deployer, alice, proxy, locking_token, discount_token, s
     locking_token.mint(proxy, 4 * UNIT, sender=deployer)
     discount_token.mint(proxy, 6 * UNIT, sender=deployer)
     rewards.harvest(4 * UNIT, 6 * UNIT, sender=deployer)
+    chain.pending_timestamp += 2 * WEEK
+    chain.mine()
 
     assert rewards.pending(alice) == (0, 0)
     assert rewards.claimable(alice) == (4 * UNIT, 6 * UNIT)
@@ -259,7 +261,7 @@ def test_unstake_excessive(deployer, alice, staking_token, staking):
     with reverts():
         staking.unstake(2 * UNIT, sender=alice)
 
-def test_unstake_report(deployer, alice, proxy, locking_token, discount_token, staking_token, staking, rewards):
+def test_unstake_report(chain, deployer, alice, proxy, locking_token, discount_token, staking_token, staking, rewards):
     # balance is reported before unstaking
     staking_token.mint(alice, UNIT, sender=deployer)
     staking_token.approve(staking, UNIT, sender=alice)
@@ -267,6 +269,7 @@ def test_unstake_report(deployer, alice, proxy, locking_token, discount_token, s
     locking_token.mint(proxy, 2 * UNIT, sender=deployer)
     discount_token.mint(proxy, 3 * UNIT, sender=deployer)
     rewards.harvest(2 * UNIT, 3 * UNIT, sender=deployer)
+    chain.pending_timestamp += 2 * WEEK
     staking.unstake(UNIT, sender=alice)
     assert rewards.packed_account_integrals(alice) == rewards.packed_integrals()
     assert rewards.pending(alice) == (2 * UNIT, 3 * UNIT)
@@ -446,7 +449,7 @@ def test_transfer_excessive(deployer, alice, bob, staking_token, staking):
     with reverts():
         staking.transfer(bob, 2 * UNIT, sender=alice)
 
-def test_transfer_report(deployer, alice, bob, proxy, locking_token, discount_token, staking_token, staking, rewards):
+def test_transfer_report(chain, deployer, alice, bob, proxy, locking_token, discount_token, staking_token, staking, rewards):
     # balances are reported before a transfer
     staking_token.mint(alice, UNIT, sender=deployer)
     staking_token.approve(staking, UNIT, sender=alice)
@@ -454,6 +457,7 @@ def test_transfer_report(deployer, alice, bob, proxy, locking_token, discount_to
     locking_token.mint(proxy, 2 * UNIT, sender=deployer)
     discount_token.mint(proxy, 3 * UNIT, sender=deployer)
     rewards.harvest(2 * UNIT, 3 * UNIT, sender=deployer)
+    chain.pending_timestamp += 2 * WEEK
     staking.transfer(bob, UNIT, sender=alice)
     packed = rewards.packed_integrals()
     assert rewards.packed_account_integrals(alice) == packed
@@ -492,7 +496,7 @@ def test_transfer_from_allowance_excessive(deployer, alice, bob, staking_token, 
     with reverts():
         staking.transferFrom(alice, bob, 2 * UNIT, sender=bob)
 
-def test_transfer_from_report(deployer, alice, bob, proxy, locking_token, discount_token, staking_token, staking, rewards):
+def test_transfer_from_report(chain, deployer, alice, bob, proxy, locking_token, discount_token, staking_token, staking, rewards):
     # balances are reported before a transferFrom
     staking_token.mint(alice, UNIT, sender=deployer)
     staking_token.approve(staking, UNIT, sender=alice)
@@ -501,6 +505,7 @@ def test_transfer_from_report(deployer, alice, bob, proxy, locking_token, discou
     discount_token.mint(proxy, 3 * UNIT, sender=deployer)
     rewards.harvest(2 * UNIT, 3 * UNIT, sender=deployer)
     staking.approve(deployer, UNIT, sender=alice)
+    chain.pending_timestamp += 2 * WEEK
     staking.transferFrom(alice, bob, UNIT, sender=deployer)
     packed = rewards.packed_integrals()
     assert rewards.packed_account_integrals(alice) == packed
