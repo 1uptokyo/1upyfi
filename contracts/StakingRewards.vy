@@ -180,6 +180,7 @@ def claimable(_account: address) -> (uint256, uint256):
 
 @external
 @payable
+@nonreentrant("lock")
 def claim(_receiver: address = msg.sender, _redeem_data: Bytes[256] = b"") -> (uint256, uint256):
     """
     @notice Claim staking rewards

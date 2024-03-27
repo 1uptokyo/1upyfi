@@ -48,6 +48,24 @@ def test_redeem_discount_eth(accounts, alice, bob, liquid_locker, rewards, disco
     assert liquid_locker.balanceOf(bob) == SCALE
     assert redeemer.balance > 0
 
+def test_redeem_discount_eth_slippage(accounts, alice, bob, liquid_locker, rewards, discount_token, yearn_redemption, redeemer):
+    # redeem with an excessive amount of ETH, it should send the excess to the receiver
+    discount_token.mint(rewards, UNIT, sender=accounts[discount_token.owner()])
+    discount_token.approve(redeemer, UNIT, sender=rewards)
+    value = yearn_redemption.eth_required(UNIT) + UNIT
+
+    assert discount_token.balanceOf(rewards) == UNIT
+    assert liquid_locker.totalSupply() == SCALE
+    assert liquid_locker.balanceOf(bob) == 0
+    assert redeemer.balance == 0
+    pre_bal = bob.balance
+    redeemer.redeem(alice, bob, 0, UNIT, b"", value=value, sender=rewards)
+    assert discount_token.balanceOf(rewards) == 0
+    assert liquid_locker.totalSupply() == 2 * SCALE
+    assert liquid_locker.balanceOf(bob) == SCALE
+    assert redeemer.balance > 0
+    assert bob.balance - pre_bal >= UNIT
+
 def test_redeem_discount_eth_lt(accounts, alice, bob, ychad, locking_token, liquid_locker, rewards, discount_token, yearn_redemption, redeemer):
     # redeem with ETH, with locking token rewards
     discount_token.mint(rewards, UNIT, sender=accounts[discount_token.owner()])

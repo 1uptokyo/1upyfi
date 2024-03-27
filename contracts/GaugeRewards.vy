@@ -111,6 +111,7 @@ def claimable(_gauge: address, _account: address) -> uint256:
 
 @external
 @payable
+@nonreentrant("lock")
 def claim(_gauges: DynArray[address, 32], _receiver: address = msg.sender, _redeem_data: Bytes[256] = b"") -> uint256:
     """
     @notice Claim and optionally redeem rewards
