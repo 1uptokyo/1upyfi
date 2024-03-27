@@ -203,27 +203,38 @@ def test_deposit_add_locked_weight(chain, deployer, alice, staking_token, stakin
     chain.mine()
     assert staking.vote_weight(alice) == 54 * UNIT # (32*6.5 + 64*3.5) / 8
 
-def test_lock(chain, deployer, alice, bob, staking_token, staking):
+def test_lock(chain, deployer, alice, staking_token, staking):
     # stake can be locked
     staking_token.mint(alice, UNIT, sender=deployer)
     staking_token.approve(staking, UNIT, sender=alice)
-    staking.deposit(UNIT, bob, sender=alice)
+    staking.deposit(UNIT, sender=alice)
     assert staking.unlock_times(alice) == 0
     ts = chain.pending_timestamp
     staking.lock(2 * WEEK, sender=alice)
     assert staking.unlock_times(alice) == ts + 2 * WEEK
 
-def test_lock_max(chain, deployer, alice, bob, staking_token, staking):
+def test_lock_max(chain, deployer, alice, staking_token, staking):
     # lock duration is capped
     staking_token.mint(alice, UNIT, sender=deployer)
     staking_token.approve(staking, UNIT, sender=alice)
-    staking.deposit(UNIT, bob, sender=alice)
     ts = chain.pending_timestamp
-    staking.lock(sender=alice)
+    staking.deposit(UNIT, sender=alice)
+    staking.lock(9 * WEEK, sender=alice)
     assert staking.unlock_times(alice) == ts + 8 * WEEK
 
+def test_lock_excessive(chain, deployer, alice, staking_token, staking):
+    # lock duration is no longer than necessary
+    staking_token.mint(alice, UNIT, sender=deployer)
+    staking_token.approve(staking, UNIT, sender=alice)
+    ts = chain.pending_timestamp
+    staking.deposit(UNIT, sender=alice)
+    ts += WEEK
+    chain.pending_timestamp = ts
+    staking.lock(8 * WEEK, sender=alice)
+    assert staking.unlock_times(alice) == ts + 7 * WEEK
+
 def test_lock_reduce(deployer, alice, staking_token, staking):
-    # cant reduce lock duration with balance
+    # cant reduce lock duration
     staking_token.mint(alice, UNIT, sender=deployer)
     staking_token.approve(staking, UNIT, sender=alice)
     staking.deposit(UNIT, sender=alice)
@@ -231,15 +242,15 @@ def test_lock_reduce(deployer, alice, staking_token, staking):
     with reverts():
         staking.lock(WEEK, sender=alice)
 
-def test_lock_reduce_no_balance(chain, deployer, alice, bob, staking_token, staking):
-    # can reduce lock duration without balance
+def test_relock(chain, deployer, alice, staking_token, staking):
+    # cant relock when already at max
     staking_token.mint(alice, UNIT, sender=deployer)
     staking_token.approve(staking, UNIT, sender=alice)
-    staking.deposit(UNIT, bob, sender=alice)
-    staking.lock(sender=alice)
     ts = chain.pending_timestamp
-    staking.lock(WEEK, sender=alice)
-    assert staking.unlock_times(alice) == ts + WEEK
+    staking.deposit(UNIT, sender=alice)
+    chain.pending_timestamp = ts + 8 * WEEK
+    with reverts():
+        staking.lock(sender=alice)
 
 def test_unstake(chain, deployer, alice, staking_token, staking):
     # unstaking starts a stream

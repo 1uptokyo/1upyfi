@@ -322,25 +322,24 @@ def lock(_duration: uint256 = max_value(uint256)) -> uint256:
     time: uint256 = 0
     balance: uint256 = 0
     week, time, balance = self._unpack(self.packed_balances[msg.sender])
+    assert balance > 0
 
     # snapshot
     if current_week > week:
         self.previous_packed_balances[msg.sender] = self.packed_balances[msg.sender]
 
-    new_duration: uint256 = min(_duration, RAMP_LENGTH)
-    assert new_duration > old_duration or balance == 0
+    # dont lock longer than needed
+    additional: uint256 = _duration - old_duration
+    max_needed: uint256 = RAMP_LENGTH - min(block.timestamp - time, RAMP_LENGTH)
+    additional = min(additional, max_needed)
+    assert additional > 0
     
     # calculate new timestamp
-    if balance > 0:
-        if time == 0:
-            time = block.timestamp
-        time -= new_duration - old_duration
-    else:
-        time = 0
+    time -= additional
 
     self.packed_balances[msg.sender] = self._pack(current_week, time, balance)
 
-    unlock_time: uint256 = block.timestamp + new_duration
+    unlock_time: uint256 = block.timestamp + old_duration + additional
     self.unlock_times[msg.sender] = unlock_time
     return unlock_time
 
