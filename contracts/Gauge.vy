@@ -345,6 +345,7 @@ def _withdraw(_assets: uint256, _receiver: address, _owner: address):
         and transferring tokens from the proxy to the receiver
     """
     assert _assets > 0
+    assert _receiver != empty(address) and _receiver != self
     if _owner != msg.sender:
         allowance: uint256 = self.allowance[_owner][msg.sender] - _assets
         self.allowance[_owner][msg.sender] = allowance

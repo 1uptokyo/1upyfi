@@ -88,7 +88,7 @@ def _mint(_amount: uint256, _receiver: address):
     @notice Mint an amount of liquid locker tokens
     """
     assert _amount > 0
-    assert _receiver != empty(address)
+    assert _receiver != empty(address) and _receiver != self
 
     self.totalSupply += _amount
     self.balanceOf[_receiver] += _amount

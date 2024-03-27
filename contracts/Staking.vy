@@ -438,6 +438,7 @@ def _deposit(_assets: uint256, _receiver: address):
     """
     @notice Update balance and transfer liquid locker tokens in
     """
+    assert _receiver != empty(address) and _receiver != self
     self._update_balance(_assets, _receiver, INCREMENT)
     self.totalSupply += _assets
 
@@ -465,6 +466,7 @@ def _withdraw(_assets: uint256, _receiver: address, _owner: address):
     """
     @notice Withdraw from the stream
     """
+    assert _receiver != empty(address) and _receiver != self
     if _owner != msg.sender:
         allowance: uint256 = self.allowance[_owner][msg.sender] - _assets
         self.allowance[_owner][msg.sender] = allowance
