@@ -157,6 +157,50 @@ def test_deposit_later_vote_weight(chain, deployer, alice, staking_token, stakin
     chain.mine()
     assert staking.vote_weight(alice) == 7 * UNIT # (32 * 1.5 + 16 * 0.5) / 8
 
+def test_deposit_locked_weight(chain, deployer, alice, staking_token, staking):
+    # locking gives immediate vote weight
+    staking_token.mint(alice, 32 * UNIT, sender=deployer)
+    staking_token.approve(staking, 32 * UNIT, sender=alice)
+    week = chain.pending_timestamp // WEEK + 1
+    ts = week * WEEK + WEEK // 2
+    chain.pending_timestamp = ts
+    staking.deposit(32 * UNIT, sender=alice)
+    chain.pending_timestamp = ts + WEEK
+    staking.lock(2 * WEEK, sender=alice)
+    chain.pending_timestamp = ts + 2 * WEEK
+    chain.mine()
+    assert staking.vote_weight(alice) == 14 * UNIT # 32 * 3.5 / 8
+
+def test_deposit_max_locked_weight(chain, deployer, alice, staking_token, staking):
+    # max locking caps weight
+    staking_token.mint(alice, 32 * UNIT, sender=deployer)
+    staking_token.approve(staking, 32 * UNIT, sender=alice)
+    week = chain.pending_timestamp // WEEK + 1
+    ts = week * WEEK + WEEK // 2
+    chain.pending_timestamp = ts
+    staking.deposit(32 * UNIT, sender=alice)
+    chain.pending_timestamp = ts + WEEK
+    staking.lock(sender=alice)
+    chain.pending_timestamp = ts + 2 * WEEK
+    chain.mine()
+    assert staking.vote_weight(alice) == 32 * UNIT
+
+def test_deposit_add_locked_weight(chain, deployer, alice, staking_token, staking):
+    # depositing with a lock gives immediate vote weight
+    staking_token.mint(alice, 96 * UNIT, sender=deployer)
+    staking_token.approve(staking, 96 * UNIT, sender=alice)
+    week = chain.pending_timestamp // WEEK + 1
+    ts = week * WEEK + WEEK // 2
+    chain.pending_timestamp = ts
+    staking.deposit(32 * UNIT, sender=alice)
+    chain.pending_timestamp = ts + WEEK
+    staking.lock(4 * WEEK, sender=alice)
+    chain.pending_timestamp = ts + 2 * WEEK
+    staking.deposit(64 * UNIT, sender=alice)
+    chain.pending_timestamp = ts + 3 * WEEK
+    chain.mine()
+    assert staking.vote_weight(alice) == 54 * UNIT # (32*6.5 + 64*3.5) / 8
+
 def test_lock(chain, deployer, alice, bob, staking_token, staking):
     # stake can be locked
     staking_token.mint(alice, UNIT, sender=deployer)
