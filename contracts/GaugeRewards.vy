@@ -56,6 +56,9 @@ event Harvest:
     amount: uint256
     fee: uint256
 
+event ClaimFees:
+    fees: uint256
+
 event SetRedeemer:
     redeemer: address
 
@@ -296,6 +299,7 @@ def claim_fees():
     self._set_pending_fees(0)
     assert pending > 0
     assert discount_token.transfer(self.treasury, pending, default_return_value=True)
+    log ClaimFees(pending)
 
 @external
 def set_redeemer(_redeemer: address):

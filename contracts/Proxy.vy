@@ -20,6 +20,10 @@ pending_management: public(address)
 operators: public(HashMap[address, bool])
 messages: public(HashMap[bytes32, bool])
 
+event Call:
+    operator: indexed(address)
+    target: indexed(address)
+
 event SetSignedMessage:
     hash: indexed(bytes32)
     signed: bool
@@ -70,6 +74,7 @@ def call(_target: address, _data: Bytes[MAX_SIZE]):
     """
     assert self.operators[msg.sender]
     raw_call(_target, _data, value=msg.value)
+    log Call(msg.sender, _target)
 
 @external
 def modify_lock(_amount: uint256, _unlock_time: uint256):

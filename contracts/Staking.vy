@@ -57,6 +57,11 @@ event Withdraw:
     assets: uint256
     shares: uint256
 
+event Lock:
+    owner: indexed(address)
+    added: uint256
+    duration: uint256
+
 event SetRewards:
     rewards: address
 
@@ -342,6 +347,7 @@ def lock(_duration: uint256 = max_value(uint256)) -> uint256:
 
     unlock_time: uint256 = block.timestamp + old_duration + additional
     self.unlock_times[msg.sender] = unlock_time
+    log Lock(msg.sender, additional, old_duration + additional)
     return unlock_time
 
 @external
