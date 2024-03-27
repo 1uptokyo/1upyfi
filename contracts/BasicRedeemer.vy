@@ -188,6 +188,7 @@ def set_treasury(_treasury: address):
     @dev Can only be called by management
     """
     assert msg.sender == self.management
+    assert _treasury != empty(address)
     self.treasury = _treasury
     log SetTreasury(_treasury)
 
