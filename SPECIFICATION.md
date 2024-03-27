@@ -89,7 +89,7 @@
 - A user with a lock cant unstake or transfer any of their staking balance until the lock expires
 - A user with a lock can still add to their staking balance through depositing or transferring, but the added balance will also become locked
 - The lock duration can only be reduced if the user has a zero staking balance
-- Upon staking or transfering to a user their new staking time is calculated as the average between their current staking time and their lock duration, weighted by the amounts: `new_staking_time = (min(previous_staking_time, 8 weeks) * previous_balance + lock_duration * additional_balance) / new_balance`
+- Upon staking or transferring to a user their new staking time is calculated as the average between their current staking time and their lock duration, weighted by the amounts: `new_staking_time = (min(previous_staking_time, 8 weeks) * previous_balance + lock_duration * additional_balance) / new_balance`
 - Upon transferring or unstaking a percentage of a users balance, their voting weight is reduced by that same percentage. For example, a user unstaking half their stake will lose half their voting weight
 - Management can set the reward contract
 

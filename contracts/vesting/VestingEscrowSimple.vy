@@ -64,7 +64,7 @@ def initialize(
 ) -> bool:
     """
     @notice Initialize the contract
-    @dev This function is seperate from `__init__` because of the factory pattern
+    @dev This function is separate from `__init__` because of the factory pattern
          used in `VestingEscrowFactory.deploy_vesting_contract`. It may be called
          once per deployment
     @param owner Owner address

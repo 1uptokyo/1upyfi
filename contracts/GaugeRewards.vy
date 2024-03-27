@@ -375,7 +375,7 @@ def accept_management():
 @internal
 def _harvest(_gauge: address, _amount: uint256, _fees: uint256) -> (uint256, uint256):
     """
-    @notice Harvest a gauge by transfering the reward tokens out of it and updating the integral
+    @notice Harvest a gauge by transferring the reward tokens out of it and updating the integral
     """
     supply: uint256 = 0
     integral: uint256 = 0
