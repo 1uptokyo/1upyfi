@@ -284,6 +284,7 @@ def fee_rate(_idx: uint256) -> uint256:
     @param _idx Fee type
     @return Fee rate (bps)
     """
+    assert _idx < 4
     return self._fee_rate(_idx)
 
 @external
@@ -395,7 +396,6 @@ def _fee_rate(_idx: uint256) -> uint256:
     """
     @notice Unpack a specific fee type from packed slot
     """
-    assert _idx < 4
     return (self.packed_fees >> 32 * (4 + _idx)) & FEE_MASK
 
 @internal
