@@ -122,8 +122,9 @@ def transferFrom(_from: address, _to: address, _value: uint256) -> bool:
     assert _to != empty(address) and _to != self
     
     if _value > 0:
-        allowance: uint256 = self.allowance[_from][msg.sender] - _value
-        self.allowance[_from][msg.sender] = allowance
+        allowance: uint256 = self.allowance[_from][msg.sender]
+        if allowance < max_value(uint256):
+            self.allowance[_from][msg.sender] = allowance - _value
 
         self._update_balance(_value, _from, DECREMENT)
         self._update_balance(_value, _to, INCREMENT)
@@ -468,8 +469,9 @@ def _withdraw(_assets: uint256, _receiver: address, _owner: address):
     """
     assert _receiver != empty(address) and _receiver != self
     if _owner != msg.sender:
-        allowance: uint256 = self.allowance[_owner][msg.sender] - _assets
-        self.allowance[_owner][msg.sender] = allowance
+        allowance: uint256 = self.allowance[_owner][msg.sender]
+        if allowance < max_value(uint256):
+            self.allowance[_owner][msg.sender] = allowance - _assets
 
     time: uint256 = 0
     total: uint256 = 0
