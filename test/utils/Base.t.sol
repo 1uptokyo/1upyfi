@@ -33,7 +33,7 @@ abstract contract BaseTest is Test {
     ) internal returns (IVestingEscrowFactory) {
         vm.startPrank(_deployer);
         address _instance = deployer.deployContract(
-            "contracts/",
+            "contracts/vesting/",
             "VestingEscrowFactory",
             abi.encode(_target)
         );
@@ -46,7 +46,7 @@ abstract contract BaseTest is Test {
     ) internal returns (IVestingEscrow) {
         vm.startPrank(_deployer);
         IVestingEscrow _instance = IVestingEscrow(
-            deployer.deployContract("contracts/", "VestingEscrowSimple")
+            deployer.deployContract("contracts/vesting/", "VestingEscrowSimple")
         );
         vm.stopPrank();
         return IVestingEscrow(_instance);
