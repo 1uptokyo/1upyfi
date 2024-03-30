@@ -10,6 +10,8 @@ LT_FEE_IDX             = 4 # claim locking token without deposit into ll
 LT_DEPOSIT_FEE_IDX     = 5 # claim locking token with deposit into ll
 
 MASK = 2**128 - 1
+SMALL_MASK = 2**32 - 1
+BIG_MASK = 2**112 - 1
 
 @fixture
 def locking_token(project, deployer):
@@ -42,30 +44,38 @@ def redeemer(project, deployer, locking_token, discount_token, rewards, redeem_t
     rewards.set_redeemer(redeemer, sender=deployer)
     return redeemer
 
-def test_report(deployer, alice, locking_token, discount_token, proxy, staking, rewards):
+def test_report(chain, deployer, alice, locking_token, discount_token, proxy, staking, rewards):
     # reporting a user's balance causes their rewards to be synced
     staking.mint(alice, 2 * UNIT, sender=deployer)
     locking_token.mint(proxy, 4 * UNIT, sender=deployer)
     discount_token.mint(proxy, 6 * UNIT, sender=deployer)
-    assert rewards.packed_integrals() == 0
+    assert rewards.packed_next() == 0
     rewards.harvest(4 * UNIT, 6 * UNIT, sender=deployer)
-    packed = rewards.packed_integrals()
+    assert rewards.pending(alice) == (0, 0)
+    assert rewards.claimable(alice) == (0, 0)
+
+    chain.pending_timestamp += 2 * WEEK
+    chain.mine()
     assert rewards.packed_account_integrals(alice) == 0
     assert rewards.pending(alice) == (0, 0)
     assert rewards.claimable(alice) == (4 * UNIT, 6 * UNIT)
     staking.burn(alice, UNIT, sender=deployer)
+    packed = rewards.packed_integrals()
+    assert packed > 0
     assert rewards.packed_account_integrals(alice) == packed
     assert rewards.pending(alice) == (4 * UNIT, 6 * UNIT)
     assert rewards.claimable(alice) == (4 * UNIT, 6 * UNIT)
  
-def test_report_deposit(deployer, alice, bob, locking_token, discount_token, proxy, staking, rewards):
+def test_report_deposit(chain, deployer, alice, bob, locking_token, discount_token, proxy, staking, rewards):
     # rewards harvested before depositing arent distributed to that user
     staking.mint(alice, 2 * UNIT, sender=deployer)
     locking_token.mint(proxy, 4 * UNIT, sender=deployer)
     discount_token.mint(proxy, 6 * UNIT, sender=deployer)
     rewards.harvest(4 * UNIT, 6 * UNIT, sender=deployer)
-    packed = rewards.packed_integrals()
+    chain.pending_timestamp += 2 * WEEK
     staking.mint(bob, UNIT, sender=deployer)
+    packed = rewards.packed_integrals()
+    assert packed > 0
     assert rewards.packed_account_integrals(bob) == packed
     assert rewards.pending(bob) == (0, 0)
     assert rewards.claimable(bob) == (0, 0)
@@ -76,9 +86,9 @@ def test_report_permission(deployer, alice, rewards):
     staking2.set_rewards(rewards, sender=deployer)
     with reverts():
         staking2.mint(alice, UNIT, sender=deployer)
- 
-def test_harvest(deployer, alice, locking_token, discount_token, proxy, staking, rewards):
-    # harvesting transfers tokens from the proxy and updates the integrals
+
+def test_harvest(chain, deployer, alice, locking_token, discount_token, proxy, staking, rewards):
+    # harvesting transfers tokens from the proxy and updates 'next' rewards
     staking.mint(alice, 2 * UNIT, sender=deployer)
     locking_token.mint(proxy, 4 * UNIT, sender=deployer)
     discount_token.mint(proxy, 8 * UNIT, sender=deployer)
@@ -86,15 +96,72 @@ def test_harvest(deployer, alice, locking_token, discount_token, proxy, staking,
     assert locking_token.balanceOf(rewards) == 0
     assert discount_token.balanceOf(proxy) == 8 * UNIT
     assert discount_token.balanceOf(rewards) == 0
-    assert rewards.packed_integrals() == 0
+    ts = chain.pending_timestamp
     rewards.harvest(4 * UNIT, 8 * UNIT, sender=deployer)
     assert locking_token.balanceOf(proxy) == 0
     assert locking_token.balanceOf(rewards) == 4 * UNIT
     assert discount_token.balanceOf(proxy) == 0
     assert discount_token.balanceOf(rewards) == 8 * UNIT
-    packed = rewards.packed_integrals()
-    assert packed & MASK == 2 * UNIT
-    assert packed >> 128 == 4 * UNIT
+    streaming = rewards.packed_streaming()
+    assert streaming >> 224 == ts
+    assert streaming & (2**224 - 1) == 0
+    next = rewards.packed_next()
+    assert next & MASK == 4 * UNIT
+    assert next >> 128 == 8 * UNIT
+    assert rewards.packed_integrals() == 0
+
+def test_harvest_multiple(chain, deployer, alice, locking_token, discount_token, proxy, staking, rewards):
+    # harvesting multiple times in the same week adds to the 'next' rewards
+    staking.mint(alice, 2 * UNIT, sender=deployer)
+    locking_token.mint(proxy, UNIT, sender=deployer)
+    discount_token.mint(proxy, 2 * UNIT, sender=deployer)
+    rewards.harvest(UNIT, 2 * UNIT, sender=deployer)
+    locking_token.mint(proxy, 3 * UNIT, sender=deployer)
+    discount_token.mint(proxy, 4 * UNIT, sender=deployer)
+    ts = chain.pending_timestamp
+    rewards.harvest(3 * UNIT, 4 * UNIT, sender=deployer)
+    assert locking_token.balanceOf(rewards) == 4 * UNIT
+    assert discount_token.balanceOf(rewards) == 6 * UNIT
+    streaming = rewards.packed_streaming()
+    assert streaming >> 224 == ts
+    assert streaming & (2**224 - 1) == 0
+    next = rewards.packed_next()
+    assert next & MASK == 4 * UNIT
+    assert next >> 128 == 6 * UNIT
+    assert rewards.packed_integrals() == 0
+
+def test_harvest_multiple_stream(chain, deployer, alice, locking_token, discount_token, proxy, staking, rewards):
+    # harvesting multiple times in consecutive weeks updates integrals
+    staking.mint(alice, 2 * UNIT, sender=deployer)
+    locking_token.mint(proxy, 4 * UNIT, sender=deployer)
+    discount_token.mint(proxy, 8 * UNIT, sender=deployer)
+    week = chain.pending_timestamp // WEEK
+    rewards.harvest(4 * UNIT, 8 * UNIT, sender=deployer)
+    locking_token.mint(proxy, 2 * UNIT, sender=deployer)
+    discount_token.mint(proxy, 4 * UNIT, sender=deployer)
+    ts = (week + 1) * WEEK + WEEK // 4
+    chain.pending_timestamp = ts
+    rewards.harvest(2 * UNIT, 4 * UNIT, sender=deployer)
+    streaming = rewards.packed_streaming()
+    assert streaming >> 224 == ts
+    assert (streaming >> 112) & BIG_MASK == 3 * UNIT
+    assert streaming & BIG_MASK == 6 * UNIT
+    next = rewards.packed_next()
+    assert next & MASK == 2 * UNIT
+    assert next >> 128 == 4 * UNIT
+    integrals = rewards.packed_integrals()
+    assert integrals & MASK == UNIT // 2
+    assert integrals >> 128 == UNIT
+    assert rewards.claimable(alice) == (UNIT, 2 * UNIT)
+    chain.pending_timestamp = ts + WEEK // 2
+    with chain.isolate():
+        chain.mine()
+        assert rewards.claimable(alice) == (3 * UNIT, 6 * UNIT)
+    rewards.sync(sender=deployer)
+    integrals = rewards.packed_integrals()
+    assert integrals & MASK == UNIT * 3 // 2
+    assert integrals >> 128 == UNIT * 3
+    assert rewards.claimable(alice) == (3 * UNIT, 6 * UNIT)
 
 def test_harvest_excessive(deployer, alice, locking_token, discount_token, proxy, staking, rewards):
     # cant harvest more than balance
@@ -125,16 +192,17 @@ def test_harvest_fee(deployer, alice, bob, locking_token, discount_token, proxy,
     assert locking_token.balanceOf(bob) == UNIT
     assert discount_token.balanceOf(rewards) == 6 * UNIT
     assert discount_token.balanceOf(bob) == 2 * UNIT
-    packed = rewards.packed_integrals()
-    assert packed & MASK == 3 * UNIT
-    assert packed >> 128 == 6 * UNIT
+    next = rewards.packed_next()
+    assert next & MASK == 3 * UNIT
+    assert next >> 128 == 6 * UNIT
 
-def test_claim_naked(deployer, alice, bob, locking_token, discount_token, proxy, staking, rewards):
+def test_claim_naked(chain, deployer, alice, bob, locking_token, discount_token, proxy, staking, rewards):
     # claim naked reward tokens
     staking.mint(alice, 2 * UNIT, sender=deployer)
     locking_token.mint(proxy, 4 * UNIT, sender=deployer)
     discount_token.mint(proxy, 6 * UNIT, sender=deployer)
     rewards.harvest(4 * UNIT, 6 * UNIT, sender=deployer)
+    chain.pending_timestamp += 2 * WEEK
     staking.burn(alice, 2 * UNIT, sender=deployer)
     assert rewards.pending(alice) == (4 * UNIT, 6 * UNIT)
     assert rewards.claimable(alice) == (4 * UNIT, 6 * UNIT)
@@ -144,7 +212,7 @@ def test_claim_naked(deployer, alice, bob, locking_token, discount_token, proxy,
     assert locking_token.balanceOf(bob) == 4 * UNIT
     assert discount_token.balanceOf(bob) == 6 * UNIT
 
-def test_claim_naked_fee(deployer, alice, bob, locking_token, discount_token, proxy, staking, rewards):
+def test_claim_naked_fee(chain, deployer, alice, bob, locking_token, discount_token, proxy, staking, rewards):
     # claim naked reward tokens, with fee
     staking.mint(alice, 2 * UNIT, sender=deployer)
     locking_token.mint(proxy, 4 * UNIT, sender=deployer)
@@ -152,25 +220,27 @@ def test_claim_naked_fee(deployer, alice, bob, locking_token, discount_token, pr
     rewards.harvest(4 * UNIT, 5 * UNIT, sender=deployer)
     rewards.set_fee_rate(LT_FEE_IDX, 2_500, sender=deployer)
     rewards.set_fee_rate(DT_FEE_IDX, 2_000, sender=deployer)
+    chain.pending_timestamp += 2 * WEEK
     staking.burn(alice, 2 * UNIT, sender=deployer)
     assert rewards.claim(bob, b"", sender=alice).return_value == (3 * UNIT, 4 * UNIT)
     assert locking_token.balanceOf(bob) == 3 * UNIT
     assert discount_token.balanceOf(bob) == 4 * UNIT
     assert rewards.pending_fees() == (UNIT, UNIT)
 
-def test_claim_redeem_sell(deployer, alice, bob, locking_token, discount_token, proxy, staking, rewards, redeemer, redeem_token):
+def test_claim_redeem_sell(chain, deployer, alice, bob, locking_token, discount_token, proxy, staking, rewards, redeemer, redeem_token):
     # claim with redeem, without ETH
     staking.mint(alice, 2 * UNIT, sender=deployer)
     locking_token.mint(proxy, 4 * UNIT, sender=deployer)
     discount_token.mint(proxy, 6 * UNIT, sender=deployer)
     rewards.harvest(4 * UNIT, 6 * UNIT, sender=deployer)
+    chain.pending_timestamp += 2 * WEEK
     staking.burn(alice, 2 * UNIT, sender=deployer)
     assert rewards.claim(bob, b"dcba", sender=alice).return_value == (24 * UNIT, 0)
     assert locking_token.balanceOf(redeemer) == 4 * UNIT
     assert discount_token.balanceOf(redeemer) == 6 * UNIT
     assert redeem_token.balanceOf(bob) == 24 * UNIT
 
-def test_claim_redeem_sell_fee(deployer, alice, bob, locking_token, discount_token, proxy, staking, rewards, redeemer, redeem_token):
+def test_claim_redeem_sell_fee(chain, deployer, alice, bob, locking_token, discount_token, proxy, staking, rewards, redeemer, redeem_token):
     # claim with redeem, without ETH, with fee
     staking.mint(alice, 2 * UNIT, sender=deployer)
     locking_token.mint(proxy, 4 * UNIT, sender=deployer)
@@ -180,6 +250,7 @@ def test_claim_redeem_sell_fee(deployer, alice, bob, locking_token, discount_tok
     rewards.set_fee_rate(LT_DEPOSIT_FEE_IDX, 2_500, sender=deployer)
     rewards.set_fee_rate(DT_FEE_IDX, 10_000, sender=deployer)
     rewards.set_fee_rate(DT_REDEEM_SELL_FEE_IDX, 5_000, sender=deployer)
+    chain.pending_timestamp += 2 * WEEK
     staking.burn(alice, 2 * UNIT, sender=deployer)
     assert rewards.claim(bob, b"dcba", sender=alice).return_value == (15 * UNIT, 0)
     assert locking_token.balanceOf(redeemer) == 3 * UNIT
@@ -187,12 +258,13 @@ def test_claim_redeem_sell_fee(deployer, alice, bob, locking_token, discount_tok
     assert redeem_token.balanceOf(bob) == 15 * UNIT
     assert rewards.pending_fees() == (UNIT, 3 * UNIT)
 
-def test_claim_redeem_eth(deployer, alice, bob, locking_token, discount_token, proxy, staking, rewards, redeemer, redeem_token):
+def test_claim_redeem_eth(chain, deployer, alice, bob, locking_token, discount_token, proxy, staking, rewards, redeemer, redeem_token):
     # claim with redeem, with ETH
     staking.mint(alice, 2 * UNIT, sender=deployer)
     locking_token.mint(proxy, 4 * UNIT, sender=deployer)
     discount_token.mint(proxy, 6 * UNIT, sender=deployer)
     rewards.harvest(4 * UNIT, 6 * UNIT, sender=deployer)
+    chain.pending_timestamp += 2 * WEEK
     staking.burn(alice, 2 * UNIT, sender=deployer)
     assert rewards.claim(bob, b"dcba", value=UNIT, sender=alice).return_value == (25 * UNIT, 0)
     assert locking_token.balanceOf(redeemer) == 4 * UNIT
@@ -200,7 +272,7 @@ def test_claim_redeem_eth(deployer, alice, bob, locking_token, discount_token, p
     assert redeem_token.balanceOf(bob) == 25 * UNIT
     assert redeemer.balance == UNIT
 
-def test_claim_redeem_eth_fee(deployer, alice, bob, locking_token, discount_token, proxy, staking, rewards, redeemer, redeem_token):
+def test_claim_redeem_eth_fee(chain, deployer, alice, bob, locking_token, discount_token, proxy, staking, rewards, redeemer, redeem_token):
     # claim with redeem, with ETH, with fee
     staking.mint(alice, 2 * UNIT, sender=deployer)
     locking_token.mint(proxy, 4 * UNIT, sender=deployer)
@@ -211,6 +283,7 @@ def test_claim_redeem_eth_fee(deployer, alice, bob, locking_token, discount_toke
     rewards.set_fee_rate(DT_FEE_IDX, 10_000, sender=deployer)
     rewards.set_fee_rate(DT_REDEEM_SELL_FEE_IDX, 10_000, sender=deployer)
     rewards.set_fee_rate(DT_REDEEM_FEE_IDX, 5_000, sender=deployer)
+    chain.pending_timestamp += 2 * WEEK
     staking.burn(alice, 2 * UNIT, sender=deployer)
     assert rewards.claim(bob, b"dcba", value=UNIT, sender=alice).return_value == (16 * UNIT, 0)
     assert locking_token.balanceOf(redeemer) == 3 * UNIT
@@ -228,6 +301,43 @@ def test_claim_redeem_no_redemeer(deployer, alice, bob, locking_token, discount_
     rewards.harvest(4 * UNIT, 6 * UNIT, sender=deployer)
     with reverts():
         rewards.claim(bob, b"dcba", sender=alice)
+
+def test_claim_stream(chain, deployer, alice, bob, locking_token, discount_token, proxy, staking, rewards):
+    # claim reward tokens from stream
+    staking.mint(alice, 2 * UNIT, sender=deployer)
+    locking_token.mint(proxy, 3 * UNIT, sender=deployer)
+    discount_token.mint(proxy, 6 * UNIT, sender=deployer)
+    week = chain.pending_timestamp // WEEK
+    rewards.harvest(3 * UNIT, 6 * UNIT, sender=deployer)
+    chain.pending_timestamp = (week + 1) * WEEK + WEEK // 3
+    with chain.isolate():
+        chain.mine()
+        assert rewards.claimable(alice) == (UNIT, 2 * UNIT)
+    assert rewards.claim(bob, b"", sender=alice).return_value == (UNIT, 2 * UNIT)
+    assert rewards.pending(alice) == (0, 0)
+    assert rewards.claimable(alice) == (0, 0)
+    assert locking_token.balanceOf(bob) == UNIT
+    assert discount_token.balanceOf(bob) == 2 * UNIT
+
+def test_claim_stream_multiple(chain, deployer, alice, bob, locking_token, discount_token, proxy, staking, rewards):
+    # claim reward tokens from stream multiple times
+    staking.mint(alice, 2 * UNIT, sender=deployer)
+    locking_token.mint(proxy, 4 * UNIT, sender=deployer)
+    discount_token.mint(proxy, 8 * UNIT, sender=deployer)
+    week = chain.pending_timestamp // WEEK
+    rewards.harvest(4 * UNIT, 8 * UNIT, sender=deployer)
+    ts = (week + 1) * WEEK + WEEK // 4
+    chain.pending_timestamp = ts
+    assert rewards.claim(bob, b"", sender=alice).return_value == (UNIT, 2 * UNIT)
+
+    chain.pending_timestamp = ts + WEEK // 2
+    with chain.isolate():
+        chain.mine()
+        assert rewards.claimable(alice) == (2 * UNIT, 4 * UNIT)
+    staking.burn(alice, 2 * UNIT, sender=deployer)
+    assert rewards.pending(alice) == (2 * UNIT, 4 * UNIT)
+    assert rewards.claimable(alice) == (2 * UNIT, 4 * UNIT)
+    assert rewards.claim(bob, b"", sender=alice).return_value == (2 * UNIT, 4 * UNIT)
 
 def test_set_fee_rate(deployer, rewards):
     # fees can be individually set
@@ -253,7 +363,7 @@ def test_set_fee_rate_permission(alice, rewards):
     with reverts():
         rewards.set_fee_rate(0, 1_000, sender=alice)
 
-def test_claim_fees(deployer, alice, bob, proxy, locking_token, discount_token, staking, rewards):
+def test_claim_fees(chain, deployer, alice, bob, proxy, locking_token, discount_token, staking, rewards):
     # claimed fees are sent to treasury
     rewards.set_treasury(bob, sender=deployer)
     rewards.set_fee_rate(LT_FEE_IDX, 2_500, sender=deployer)
@@ -263,6 +373,7 @@ def test_claim_fees(deployer, alice, bob, proxy, locking_token, discount_token, 
     locking_token.mint(proxy, 4 * UNIT, sender=deployer)
     discount_token.mint(proxy, 6 * UNIT, sender=deployer)
     rewards.harvest(4 * UNIT, 6 * UNIT, sender=deployer)
+    chain.pending_timestamp += 2 * WEEK
     rewards.claim(sender=alice)
     assert rewards.pending_fees() == (UNIT, 3 * UNIT)
     rewards.claim_fees(sender=alice)

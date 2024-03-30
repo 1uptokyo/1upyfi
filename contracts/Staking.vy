@@ -17,7 +17,7 @@ implements: ERC20
 implements: ERC4626
 
 interface Rewards:
-    def report(_account: address, _balance: uint256): nonpayable
+    def report(_account: address, _amount: uint256, _supply: uint256): nonpayable
 
 asset: public(immutable(address))
 management: public(address)
@@ -56,6 +56,11 @@ event Withdraw:
     owner: indexed(address)
     assets: uint256
     shares: uint256
+
+event Lock:
+    owner: indexed(address)
+    added: uint256
+    duration: uint256
 
 event SetRewards:
     rewards: address
@@ -122,8 +127,9 @@ def transferFrom(_from: address, _to: address, _value: uint256) -> bool:
     assert _to != empty(address) and _to != self
     
     if _value > 0:
-        allowance: uint256 = self.allowance[_from][msg.sender] - _value
-        self.allowance[_from][msg.sender] = allowance
+        allowance: uint256 = self.allowance[_from][msg.sender]
+        if allowance < max_value(uint256):
+            self.allowance[_from][msg.sender] = allowance - _value
 
         self._update_balance(_value, _from, DECREMENT)
         self._update_balance(_value, _to, INCREMENT)
@@ -322,26 +328,26 @@ def lock(_duration: uint256 = max_value(uint256)) -> uint256:
     time: uint256 = 0
     balance: uint256 = 0
     week, time, balance = self._unpack(self.packed_balances[msg.sender])
+    assert balance > 0
 
     # snapshot
     if current_week > week:
         self.previous_packed_balances[msg.sender] = self.packed_balances[msg.sender]
 
-    new_duration: uint256 = min(_duration, RAMP_LENGTH)
-    assert new_duration > old_duration or balance == 0
+    # dont lock longer than needed
+    additional: uint256 = _duration - old_duration
+    max_needed: uint256 = RAMP_LENGTH - min(block.timestamp - time, RAMP_LENGTH)
+    additional = min(additional, max_needed)
+    assert additional > 0
     
     # calculate new timestamp
-    if balance > 0:
-        if time == 0:
-            time = block.timestamp
-        time -= new_duration - old_duration
-    else:
-        time = 0
+    time -= additional
 
     self.packed_balances[msg.sender] = self._pack(current_week, time, balance)
 
-    unlock_time: uint256 = block.timestamp + new_duration
+    unlock_time: uint256 = block.timestamp + old_duration + additional
     self.unlock_times[msg.sender] = unlock_time
+    log Lock(msg.sender, additional, old_duration + additional)
     return unlock_time
 
 @external
@@ -352,8 +358,8 @@ def unstake(_assets: uint256):
     @dev Adds existing stream to new stream, if applicable
     """
     assert _assets > 0
-    self.totalSupply -= _assets
     self._update_balance(_assets, msg.sender, DECREMENT)
+    self.totalSupply -= _assets
 
     time: uint256 = 0
     total: uint256 = 0
@@ -439,8 +445,9 @@ def _deposit(_assets: uint256, _receiver: address):
     """
     @notice Update balance and transfer liquid locker tokens in
     """
-    self.totalSupply += _assets
+    assert _receiver != empty(address) and _receiver != self
     self._update_balance(_assets, _receiver, INCREMENT)
+    self.totalSupply += _assets
 
     assert ERC20(asset).transferFrom(msg.sender, self, _assets, default_return_value=True)
     log Deposit(msg.sender, _receiver, _assets, _assets)
@@ -466,9 +473,11 @@ def _withdraw(_assets: uint256, _receiver: address, _owner: address):
     """
     @notice Withdraw from the stream
     """
+    assert _receiver != empty(address) and _receiver != self
     if _owner != msg.sender:
-        allowance: uint256 = self.allowance[_owner][msg.sender] - _assets
-        self.allowance[_owner][msg.sender] = allowance
+        allowance: uint256 = self.allowance[_owner][msg.sender]
+        if allowance < max_value(uint256):
+            self.allowance[_owner][msg.sender] = allowance - _assets
 
     time: uint256 = 0
     total: uint256 = 0
@@ -492,7 +501,7 @@ def _withdraw(_assets: uint256, _receiver: address, _owner: address):
 @internal
 def _update_balance(_amount: uint256, _account: address, _increment: bool):
     """
-    @notice Update balance and time
+    @notice Update balance and time. Supply should be updated _after_ calling this function
     """
     lock_duration: uint256 = self.unlock_times[_account]
     if lock_duration > block.timestamp:
@@ -507,7 +516,7 @@ def _update_balance(_amount: uint256, _account: address, _increment: bool):
     week, time, balance = self._unpack(self.packed_balances[_account])
 
     # sync rewards
-    self.rewards.report(_account, balance)
+    self.rewards.report(_account, balance, self.totalSupply)
 
     if _increment == INCREMENT:
         if time > 0:

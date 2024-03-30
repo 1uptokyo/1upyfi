@@ -62,11 +62,9 @@ def deploy_gauge(_ygauge: address) -> address:
     @dev Calls registry to register gauge
     """
     assert yearn_registry.registered(_ygauge)
-    blueprint: address = self.gauge_blueprint
-    assert blueprint != empty(address)
 
     gauge: address = create_from_blueprint(
-        blueprint,
+        self.gauge_blueprint,
         _ygauge,
         proxy,
         reward_token,

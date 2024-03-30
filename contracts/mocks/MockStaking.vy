@@ -4,7 +4,7 @@ from vyper.interfaces import ERC20
 implements: ERC20
 
 interface Rewards:
-    def report(_account: address, _balance: uint256): nonpayable
+    def report(_account: address, _amount: uint256, _supply: uint256): nonpayable
 
 rewards: Rewards
 
@@ -33,8 +33,8 @@ def __init__():
 @external
 def transfer(_to: address, _value: uint256) -> bool:
     assert _to != empty(address)
-    self.rewards.report(msg.sender, self.balanceOf[msg.sender])
-    self.rewards.report(_to, self.balanceOf[_to])
+    self.rewards.report(msg.sender, self.balanceOf[msg.sender], self.totalSupply)
+    self.rewards.report(_to, self.balanceOf[_to], self.totalSupply)
 
     self.balanceOf[msg.sender] -= _value
     self.balanceOf[_to] += _value
@@ -44,8 +44,8 @@ def transfer(_to: address, _value: uint256) -> bool:
 @external
 def transferFrom(_from: address, _to: address, _value: uint256) -> bool:
     assert _to != empty(address)
-    self.rewards.report(_from, self.balanceOf[_from])
-    self.rewards.report(_to, self.balanceOf[_to])
+    self.rewards.report(_from, self.balanceOf[_from], self.totalSupply)
+    self.rewards.report(_to, self.balanceOf[_to], self.totalSupply)
 
     self.allowance[_from][msg.sender] -= _value
     self.balanceOf[_from] -= _value
@@ -61,7 +61,7 @@ def approve(_spender: address, _value: uint256) -> bool:
 
 @external
 def mint(_account: address, _value: uint256):
-    self.rewards.report(_account, self.balanceOf[_account])
+    self.rewards.report(_account, self.balanceOf[_account], self.totalSupply)
 
     self.totalSupply += _value
     self.balanceOf[_account] += _value
@@ -69,7 +69,7 @@ def mint(_account: address, _value: uint256):
 
 @external
 def burn(_account: address, _value: uint256):
-    self.rewards.report(_account, self.balanceOf[_account])
+    self.rewards.report(_account, self.balanceOf[_account], self.totalSupply)
 
     self.totalSupply -= _value
     self.balanceOf[_account] -= _value

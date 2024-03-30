@@ -150,11 +150,14 @@ def redeem(_account: address, _receiver: address, _lt_amount: uint256, _dt_amoun
 @internal
 def _redeem_yearn(_receiver: address, _amount: uint256, _eth_amount: uint256):
     """
-    @notice Redeem through Yearn. Keep slippage excess
+    @notice Redeem through Yearn. Refunds any excess above 0.3%
     """
     value: uint256 = self.yearn_redemption.eth_required(_amount)
-    value -= value * 3 / 1000
     assert value > 0
+    if _eth_amount > value:
+        # return anything above 0.3%
+        raw_call(_receiver, b"", value=_eth_amount - value)
+    value -= value * 3 / 1000
     assert _eth_amount >= value, "slippage"
     self.yearn_redemption.redeem(_amount, value=value)
 
@@ -185,6 +188,7 @@ def set_treasury(_treasury: address):
     @dev Can only be called by management
     """
     assert msg.sender == self.management
+    assert _treasury != empty(address)
     self.treasury = _treasury
     log SetTreasury(_treasury)
 

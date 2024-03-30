@@ -79,7 +79,7 @@ def test_deposit_excessive(deployer, alice, staking_token, staking):
     with reverts():
         staking.deposit(2 * UNIT, sender=alice)
 
-def test_deposit_report(deployer, alice, proxy, locking_token, discount_token, staking_token, staking, rewards):
+def test_deposit_report(chain, deployer, alice, proxy, locking_token, discount_token, staking_token, staking, rewards):
     # depositing reports previous balance, updating user's integral
     staking_token.mint(alice, 3 * UNIT, sender=deployer)
     staking_token.approve(staking, 3 * UNIT, sender=alice)
@@ -88,6 +88,8 @@ def test_deposit_report(deployer, alice, proxy, locking_token, discount_token, s
     locking_token.mint(proxy, 4 * UNIT, sender=deployer)
     discount_token.mint(proxy, 6 * UNIT, sender=deployer)
     rewards.harvest(4 * UNIT, 6 * UNIT, sender=deployer)
+    chain.pending_timestamp += 2 * WEEK
+    chain.mine()
 
     assert rewards.pending(alice) == (0, 0)
     assert rewards.claimable(alice) == (4 * UNIT, 6 * UNIT)
@@ -157,27 +159,82 @@ def test_deposit_later_vote_weight(chain, deployer, alice, staking_token, stakin
     chain.mine()
     assert staking.vote_weight(alice) == 7 * UNIT # (32 * 1.5 + 16 * 0.5) / 8
 
-def test_lock(chain, deployer, alice, bob, staking_token, staking):
+def test_deposit_locked_weight(chain, deployer, alice, staking_token, staking):
+    # locking gives immediate vote weight
+    staking_token.mint(alice, 32 * UNIT, sender=deployer)
+    staking_token.approve(staking, 32 * UNIT, sender=alice)
+    week = chain.pending_timestamp // WEEK + 1
+    ts = week * WEEK + WEEK // 2
+    chain.pending_timestamp = ts
+    staking.deposit(32 * UNIT, sender=alice)
+    chain.pending_timestamp = ts + WEEK
+    staking.lock(2 * WEEK, sender=alice)
+    chain.pending_timestamp = ts + 2 * WEEK
+    chain.mine()
+    assert staking.vote_weight(alice) == 14 * UNIT # 32 * 3.5 / 8
+
+def test_deposit_max_locked_weight(chain, deployer, alice, staking_token, staking):
+    # max locking caps weight
+    staking_token.mint(alice, 32 * UNIT, sender=deployer)
+    staking_token.approve(staking, 32 * UNIT, sender=alice)
+    week = chain.pending_timestamp // WEEK + 1
+    ts = week * WEEK + WEEK // 2
+    chain.pending_timestamp = ts
+    staking.deposit(32 * UNIT, sender=alice)
+    chain.pending_timestamp = ts + WEEK
+    staking.lock(sender=alice)
+    chain.pending_timestamp = ts + 2 * WEEK
+    chain.mine()
+    assert staking.vote_weight(alice) == 32 * UNIT
+
+def test_deposit_add_locked_weight(chain, deployer, alice, staking_token, staking):
+    # depositing with a lock gives immediate vote weight
+    staking_token.mint(alice, 96 * UNIT, sender=deployer)
+    staking_token.approve(staking, 96 * UNIT, sender=alice)
+    week = chain.pending_timestamp // WEEK + 1
+    ts = week * WEEK + WEEK // 2
+    chain.pending_timestamp = ts
+    staking.deposit(32 * UNIT, sender=alice)
+    chain.pending_timestamp = ts + WEEK
+    staking.lock(4 * WEEK, sender=alice)
+    chain.pending_timestamp = ts + 2 * WEEK
+    staking.deposit(64 * UNIT, sender=alice)
+    chain.pending_timestamp = ts + 3 * WEEK
+    chain.mine()
+    assert staking.vote_weight(alice) == 54 * UNIT # (32*6.5 + 64*3.5) / 8
+
+def test_lock(chain, deployer, alice, staking_token, staking):
     # stake can be locked
     staking_token.mint(alice, UNIT, sender=deployer)
     staking_token.approve(staking, UNIT, sender=alice)
-    staking.deposit(UNIT, bob, sender=alice)
+    staking.deposit(UNIT, sender=alice)
     assert staking.unlock_times(alice) == 0
     ts = chain.pending_timestamp
     staking.lock(2 * WEEK, sender=alice)
     assert staking.unlock_times(alice) == ts + 2 * WEEK
 
-def test_lock_max(chain, deployer, alice, bob, staking_token, staking):
+def test_lock_max(chain, deployer, alice, staking_token, staking):
     # lock duration is capped
     staking_token.mint(alice, UNIT, sender=deployer)
     staking_token.approve(staking, UNIT, sender=alice)
-    staking.deposit(UNIT, bob, sender=alice)
     ts = chain.pending_timestamp
-    staking.lock(sender=alice)
+    staking.deposit(UNIT, sender=alice)
+    staking.lock(9 * WEEK, sender=alice)
     assert staking.unlock_times(alice) == ts + 8 * WEEK
 
+def test_lock_excessive(chain, deployer, alice, staking_token, staking):
+    # lock duration is no longer than necessary
+    staking_token.mint(alice, UNIT, sender=deployer)
+    staking_token.approve(staking, UNIT, sender=alice)
+    ts = chain.pending_timestamp
+    staking.deposit(UNIT, sender=alice)
+    ts += WEEK
+    chain.pending_timestamp = ts
+    staking.lock(8 * WEEK, sender=alice)
+    assert staking.unlock_times(alice) == ts + 7 * WEEK
+
 def test_lock_reduce(deployer, alice, staking_token, staking):
-    # cant reduce lock duration with balance
+    # cant reduce lock duration
     staking_token.mint(alice, UNIT, sender=deployer)
     staking_token.approve(staking, UNIT, sender=alice)
     staking.deposit(UNIT, sender=alice)
@@ -185,15 +242,15 @@ def test_lock_reduce(deployer, alice, staking_token, staking):
     with reverts():
         staking.lock(WEEK, sender=alice)
 
-def test_lock_reduce_no_balance(chain, deployer, alice, bob, staking_token, staking):
-    # can reduce lock duration without balance
+def test_relock(chain, deployer, alice, staking_token, staking):
+    # cant relock when already at max
     staking_token.mint(alice, UNIT, sender=deployer)
     staking_token.approve(staking, UNIT, sender=alice)
-    staking.deposit(UNIT, bob, sender=alice)
-    staking.lock(sender=alice)
     ts = chain.pending_timestamp
-    staking.lock(WEEK, sender=alice)
-    assert staking.unlock_times(alice) == ts + WEEK
+    staking.deposit(UNIT, sender=alice)
+    chain.pending_timestamp = ts + 8 * WEEK
+    with reverts():
+        staking.lock(sender=alice)
 
 def test_unstake(chain, deployer, alice, staking_token, staking):
     # unstaking starts a stream
@@ -215,7 +272,7 @@ def test_unstake_excessive(deployer, alice, staking_token, staking):
     with reverts():
         staking.unstake(2 * UNIT, sender=alice)
 
-def test_unstake_report(deployer, alice, proxy, locking_token, discount_token, staking_token, staking, rewards):
+def test_unstake_report(chain, deployer, alice, proxy, locking_token, discount_token, staking_token, staking, rewards):
     # balance is reported before unstaking
     staking_token.mint(alice, UNIT, sender=deployer)
     staking_token.approve(staking, UNIT, sender=alice)
@@ -223,6 +280,7 @@ def test_unstake_report(deployer, alice, proxy, locking_token, discount_token, s
     locking_token.mint(proxy, 2 * UNIT, sender=deployer)
     discount_token.mint(proxy, 3 * UNIT, sender=deployer)
     rewards.harvest(2 * UNIT, 3 * UNIT, sender=deployer)
+    chain.pending_timestamp += 2 * WEEK
     staking.unstake(UNIT, sender=alice)
     assert rewards.packed_account_integrals(alice) == rewards.packed_integrals()
     assert rewards.pending(alice) == (2 * UNIT, 3 * UNIT)
@@ -402,7 +460,7 @@ def test_transfer_excessive(deployer, alice, bob, staking_token, staking):
     with reverts():
         staking.transfer(bob, 2 * UNIT, sender=alice)
 
-def test_transfer_report(deployer, alice, bob, proxy, locking_token, discount_token, staking_token, staking, rewards):
+def test_transfer_report(chain, deployer, alice, bob, proxy, locking_token, discount_token, staking_token, staking, rewards):
     # balances are reported before a transfer
     staking_token.mint(alice, UNIT, sender=deployer)
     staking_token.approve(staking, UNIT, sender=alice)
@@ -410,6 +468,7 @@ def test_transfer_report(deployer, alice, bob, proxy, locking_token, discount_to
     locking_token.mint(proxy, 2 * UNIT, sender=deployer)
     discount_token.mint(proxy, 3 * UNIT, sender=deployer)
     rewards.harvest(2 * UNIT, 3 * UNIT, sender=deployer)
+    chain.pending_timestamp += 2 * WEEK
     staking.transfer(bob, UNIT, sender=alice)
     packed = rewards.packed_integrals()
     assert rewards.packed_account_integrals(alice) == packed
@@ -448,7 +507,7 @@ def test_transfer_from_allowance_excessive(deployer, alice, bob, staking_token, 
     with reverts():
         staking.transferFrom(alice, bob, 2 * UNIT, sender=bob)
 
-def test_transfer_from_report(deployer, alice, bob, proxy, locking_token, discount_token, staking_token, staking, rewards):
+def test_transfer_from_report(chain, deployer, alice, bob, proxy, locking_token, discount_token, staking_token, staking, rewards):
     # balances are reported before a transferFrom
     staking_token.mint(alice, UNIT, sender=deployer)
     staking_token.approve(staking, UNIT, sender=alice)
@@ -457,6 +516,7 @@ def test_transfer_from_report(deployer, alice, bob, proxy, locking_token, discou
     discount_token.mint(proxy, 3 * UNIT, sender=deployer)
     rewards.harvest(2 * UNIT, 3 * UNIT, sender=deployer)
     staking.approve(deployer, UNIT, sender=alice)
+    chain.pending_timestamp += 2 * WEEK
     staking.transferFrom(alice, bob, UNIT, sender=deployer)
     packed = rewards.packed_integrals()
     assert rewards.packed_account_integrals(alice) == packed

@@ -56,6 +56,9 @@ event Harvest:
     amount: uint256
     fee: uint256
 
+event ClaimFees:
+    fees: uint256
+
 event SetRedeemer:
     redeemer: address
 
@@ -111,6 +114,7 @@ def claimable(_gauge: address, _account: address) -> uint256:
 
 @external
 @payable
+@nonreentrant("lock")
 def claim(_gauges: DynArray[address, 32], _receiver: address = msg.sender, _redeem_data: Bytes[256] = b"") -> uint256:
     """
     @notice Claim and optionally redeem rewards
@@ -122,10 +126,10 @@ def claim(_gauges: DynArray[address, 32], _receiver: address = msg.sender, _rede
     amount: uint256 = self.pending[msg.sender]
     self.pending[msg.sender] = 0
 
+    balance: uint256 = 0
+    account_integral: uint256 = 0
     for gauge in _gauges:
         integral: uint256 = self._unpack(self.packed_supply[gauge])[1]
-        balance: uint256 = 0
-        account_integral: uint256 = 0
         balance, account_integral = self._unpack(self.packed_balances[gauge][msg.sender])
         if integral > account_integral:
             amount += (integral - account_integral) * balance / PRECISION
@@ -168,6 +172,8 @@ def harvest(_gauges: DynArray[address, 32], _amounts: DynArray[uint256, 32], _re
     assert len(_gauges) == len(_amounts)
     fee_rate: uint256 = self._fee_rate(HARVEST_FEE_IDX)
     total_fees: uint256 = 0
+    supply: uint256 = 0
+    integral: uint256 = 0
     for i in range(32):
         if i == len(_gauges):
             break
@@ -176,8 +182,6 @@ def harvest(_gauges: DynArray[address, 32], _amounts: DynArray[uint256, 32], _re
         fees: uint256 = amount * fee_rate / FEE_DENOMINATOR
         amount -= fees
 
-        supply: uint256 = 0
-        integral: uint256 = 0
         supply, integral = self._harvest(gauge, amount, fees)
 
         if amount == 0 or supply == 0:
@@ -210,7 +214,7 @@ def report(_ygauge: address, _from: address, _to: address, _amount: uint256, _re
         assert _amount == 0 and _rewards > 0
         self.packed_supply[msg.sender] = self._pack(supply, integral)
         return
-    assert _from != _to and _to != self and _to != _ygauge and _amount > 0
+    assert _to not in [_from, self, msg.sender, _ygauge] and _amount > 0
     
     account_balance: uint256 = 0
     account_integral: uint256 = 0
@@ -283,6 +287,7 @@ def fee_rate(_idx: uint256) -> uint256:
     @param _idx Fee type
     @return Fee rate (bps)
     """
+    assert _idx < 4
     return self._fee_rate(_idx)
 
 @external
@@ -294,6 +299,7 @@ def claim_fees():
     self._set_pending_fees(0)
     assert pending > 0
     assert discount_token.transfer(self.treasury, pending, default_return_value=True)
+    log ClaimFees(pending)
 
 @external
 def set_redeemer(_redeemer: address):
@@ -373,7 +379,7 @@ def accept_management():
 @internal
 def _harvest(_gauge: address, _amount: uint256, _fees: uint256) -> (uint256, uint256):
     """
-    @notice Harvest a gauge by transfering the reward tokens out of it and updating the integral
+    @notice Harvest a gauge by transferring the reward tokens out of it and updating the integral
     """
     supply: uint256 = 0
     integral: uint256 = 0
@@ -394,7 +400,6 @@ def _fee_rate(_idx: uint256) -> uint256:
     """
     @notice Unpack a specific fee type from packed slot
     """
-    assert _idx < 4
     return (self.packed_fees >> 32 * (4 + _idx)) & FEE_MASK
 
 @internal
