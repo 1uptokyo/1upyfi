@@ -9,12 +9,11 @@ def yvault(project, deployer):
     return project.MockToken.deploy(sender=deployer)
 
 @fixture
-def ygauge(deployer, yvault):
+def ygauge(networks, deployer, yvault):
     ygauge_mainnet = Contract(YGAUGE)
-    ygauge = ContractContainer(ygauge_mainnet.contract_type).deploy(
-        ygauge_mainnet.VEYFI(), ygauge_mainnet.REWARD_TOKEN(), ygauge_mainnet.VE_YFI_POOL(),
-        sender=deployer
-    )
+    ygauge = '0x0123456789012345678901234567890123456789'
+    networks.active_provider.set_code(ygauge, networks.active_provider.get_code(YGAUGE))
+    ygauge = Contract(ygauge, ygauge_mainnet.contract_type)
     ygauge.initialize(yvault, deployer, sender=deployer)
     return ygauge
 
