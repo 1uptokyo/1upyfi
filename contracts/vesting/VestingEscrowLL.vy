@@ -1,7 +1,7 @@
 # @version 0.3.10
 
 """
-@title Simple Vesting Escrow
+@title Vesting Escrow for veYFI liquid lockers
 @author Curve Finance, Yearn Finance
 @license MIT
 @notice Vests ERC20 tokens for a single address

@@ -4,7 +4,7 @@
 @title Vesting Escrow Factory
 @author Curve Finance, Yearn Finance
 @license MIT
-@notice Stores and distributes ERC20 tokens by deploying `VestingEscrowSimple` contracts
+@notice Stores YFI and distributes veYFI liquid locker tokens by deploying `VestingEscrowLL` contracts
 """
 
 from vyper.interfaces import ERC20
@@ -74,6 +74,8 @@ def __init__(target: address, yfi: address, owner: address):
     @dev Prior to deployment you must deploy one copy of `VestingEscrowSimple` which
          is used as a library for vesting contracts deployed by this factory
     @param target `VestingEscrowSimple` contract address
+    @param yfi YFI token address
+    @param owner The owner of the factory that can add/remove liquid lockers and their operators
     """
     TARGET = target
     YFI = ERC20(yfi)
@@ -155,7 +157,7 @@ def deploy_vesting_contract(
         vest.cliff,
         open_claim,
     )
-    assert ERC20(token).transfer(escrow, ll_amount)
+    assert ERC20(token).transfer(escrow, ll_amount, default_return_value=True)
     log VestingContractDeployed(
         msg.sender,
         token,
@@ -169,7 +171,7 @@ def deploy_vesting_contract(
 @external
 def set_liquid_locker(liquid_locker: address, depositor: address):
     assert msg.sender == OWNER
-    assert liquid_locker != empty(address)
+    assert liquid_locker != empty(address) and liquid_locker != YFI.address
     self.liquid_lockers[liquid_locker] = depositor
     log LiquidLockerSet(liquid_locker, depositor)
 
