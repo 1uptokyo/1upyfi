@@ -126,10 +126,10 @@ def claim(_gauges: DynArray[address, 32], _receiver: address = msg.sender, _rede
     amount: uint256 = self.pending[msg.sender]
     self.pending[msg.sender] = 0
 
+    balance: uint256 = 0
+    account_integral: uint256 = 0
     for gauge in _gauges:
         integral: uint256 = self._unpack(self.packed_supply[gauge])[1]
-        balance: uint256 = 0
-        account_integral: uint256 = 0
         balance, account_integral = self._unpack(self.packed_balances[gauge][msg.sender])
         if integral > account_integral:
             amount += (integral - account_integral) * balance / PRECISION
@@ -172,6 +172,8 @@ def harvest(_gauges: DynArray[address, 32], _amounts: DynArray[uint256, 32], _re
     assert len(_gauges) == len(_amounts)
     fee_rate: uint256 = self._fee_rate(HARVEST_FEE_IDX)
     total_fees: uint256 = 0
+    supply: uint256 = 0
+    integral: uint256 = 0
     for i in range(32):
         if i == len(_gauges):
             break
@@ -180,8 +182,6 @@ def harvest(_gauges: DynArray[address, 32], _amounts: DynArray[uint256, 32], _re
         fees: uint256 = amount * fee_rate / FEE_DENOMINATOR
         amount -= fees
 
-        supply: uint256 = 0
-        integral: uint256 = 0
         supply, integral = self._harvest(gauge, amount, fees)
 
         if amount == 0 or supply == 0:
