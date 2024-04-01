@@ -498,7 +498,7 @@ def _pack(_a: uint256, _b: uint256) -> uint256:
     @notice Pack two values into two equally sized parts of a single slot
     """
     assert _a <= MASK and _b <= MASK
-    return _a | _b << 128
+    return _a | (_b << 128)
 
 @internal
 @pure
