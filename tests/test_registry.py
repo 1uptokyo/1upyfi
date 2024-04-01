@@ -16,12 +16,16 @@ def registry(project, deployer, registrar, proxy):
     return registry
 
 @fixture
+def yvault(project, deployer):
+    return project.MockToken.deploy(sender=deployer)
+
+@fixture
 def ygauge(project, deployer):
     return project.MockYearnGauge.deploy(sender=deployer)
 
 @fixture
-def gauge(project, deployer, ygauge):
-    return project.MockGauge.deploy(ygauge, sender=deployer)
+def gauge(project, deployer, yvault, ygauge):
+    return project.MockGauge.deploy(yvault, ygauge, sender=deployer)
 
 def test_register(registrar, registry, ygauge, gauge):
     # register a gauge
@@ -51,17 +55,18 @@ def test_register_again(registrar, registry, gauge):
     with reverts():
         registry.register(gauge, sender=registrar)
 
-def test_register_double(project, deployer, registrar, registry, ygauge, gauge):
+def test_register_double(project, deployer, registrar, registry, yvault, ygauge, gauge):
     # cant register another gauge with same ygauge
     registry.register(gauge, sender=registrar)
-    gauge2 = project.MockGauge.deploy(ygauge, sender=deployer)
+    gauge2 = project.MockGauge.deploy(yvault, ygauge, sender=deployer)
     with reverts():
         registry.register(gauge2, sender=registrar)
 
 def test_deregister(project, deployer, registrar, registry, ygauge, gauge):
     # deregister a gauge
+    yvault2 = project.MockToken.deploy(sender=deployer)
     ygauge2 = project.MockYearnGauge.deploy(sender=deployer)
-    gauge2 = project.MockGauge.deploy(ygauge2, sender=deployer)
+    gauge2 = project.MockGauge.deploy(yvault2, ygauge2, sender=deployer)
     registry.register(gauge, sender=registrar)
     registry.register(gauge2, sender=registrar)
     assert registry.num_gauges() == 2
@@ -90,8 +95,9 @@ def test_deregister(project, deployer, registrar, registry, ygauge, gauge):
 
 def test_deregister_last(project, deployer, registrar, registry, ygauge, gauge):
     # deregister last registered gauge - update array correctly
+    yvault2 = project.MockToken.deploy(sender=deployer)
     ygauge2 = project.MockYearnGauge.deploy(sender=deployer)
-    gauge2 = project.MockGauge.deploy(ygauge2, sender=deployer)
+    gauge2 = project.MockGauge.deploy(yvault2, ygauge2, sender=deployer)
     registry.register(gauge, sender=registrar)
     registry.register(gauge2, sender=registrar)
     registry.deregister(gauge2, 1, sender=deployer)
@@ -111,23 +117,25 @@ def test_deregister_permission(registrar, registry, gauge):
 
 def test_deregister_not_registered(project, deployer, registrar, registry, gauge):
     # cant deregister a gauge that isnt registered
+    yvault2 = project.MockToken.deploy(sender=deployer)
     ygauge2 = project.MockYearnGauge.deploy(sender=deployer)
-    gauge2 = project.MockGauge.deploy(ygauge2, sender=deployer)
+    gauge2 = project.MockGauge.deploy(yvault2, ygauge2, sender=deployer)
     registry.register(gauge, sender=registrar)
     with reverts():
         registry.deregister(gauge2, 1, sender=deployer)
 
-def test_deregister_wrong(project, deployer, registrar, registry, ygauge, gauge):
+def test_deregister_wrong(project, deployer, registrar, registry, yvault, ygauge, gauge):
     # cant deregister a non-registered gauge that has a registered ygauge
-    gauge2 = project.MockGauge.deploy(ygauge, sender=deployer)
+    gauge2 = project.MockGauge.deploy(yvault, ygauge, sender=deployer)
     registry.register(gauge, sender=registrar)
     with reverts():
         registry.deregister(gauge2, 0, sender=deployer)
 
 def test_deregister_idx(project, deployer, registrar, registry, gauge):
     # cant deregister with wrong index
+    yvault2 = project.MockToken.deploy(sender=deployer)
     ygauge2 = project.MockYearnGauge.deploy(sender=deployer)
-    gauge2 = project.MockGauge.deploy(ygauge2, sender=deployer)
+    gauge2 = project.MockGauge.deploy(yvault2, ygauge2, sender=deployer)
     registry.register(gauge, sender=registrar)
     registry.register(gauge2, sender=registrar)
     with reverts():

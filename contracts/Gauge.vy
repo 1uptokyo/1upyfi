@@ -28,6 +28,7 @@ interface Rewards:
     def gauge_balance(_gauge: address, _account: address) -> uint256: view
 
 asset: public(immutable(address))
+ygauge: public(immutable(address))
 proxy: public(immutable(address))
 reward_token: public(immutable(ERC20))
 rewards: public(immutable(Rewards))
@@ -60,19 +61,21 @@ event Withdraw:
 PREFIX: constant(String[3]) = "1up"
 
 @external
-def __init__(_asset: address, _proxy: address, _reward_token: address, _rewards: address):
+def __init__(_ygauge: address, _proxy: address, _reward_token: address, _rewards: address):
     """
     @notice Constructor
-    @param _asset Underlying Yearn gauge
+    @param _ygauge Yearn gauge address
     @param _proxy Proxy
     @param _reward_token Reward token address
     @param _rewards Rewards contract
     """
-    asset = _asset
+    asset = ERC4626(_ygauge).asset()
+    ygauge = _ygauge
     proxy = _proxy
     reward_token = ERC20(_reward_token)
     rewards = Rewards(_rewards)
     assert reward_token.approve(_rewards, max_value(uint256), default_return_value=True)
+    assert ERC20(asset).approve(_ygauge, max_value(uint256), default_return_value=True)
     log Transfer(empty(address), msg.sender, 0)
 
 @external
@@ -83,8 +86,7 @@ def name() -> String[128]:
     @return Gauge name
     @dev Based on the name of the asset inside the Yearn gauge
     """
-    vault: address = ERC4626(asset).asset()
-    name: String[124] = ERC20Detailed(vault).name()
+    name: String[124] = ERC20Detailed(asset).name()
     return concat(PREFIX, " ", name)
 
 @external
@@ -95,8 +97,7 @@ def symbol() -> String[64]:
     @return Gauge symbol
     @dev Based on the name of the asset inside the Yearn gauge
     """
-    vault: address = ERC4626(asset).asset()
-    symbol: String[60] = ERC20Detailed(vault).symbol()
+    symbol: String[60] = ERC20Detailed(asset).symbol()
     return concat(PREFIX, "-", symbol)
 
 @external
@@ -129,7 +130,7 @@ def transfer(_to: address, _value: uint256) -> bool:
     assert _to != empty(address) and _to != self
 
     if _value > 0:
-        rewards.report(asset, msg.sender, _to, _value, 0)
+        rewards.report(ygauge, msg.sender, _to, _value, 0)
 
     log Transfer(msg.sender, _to, _value)
     return True
@@ -150,7 +151,7 @@ def transferFrom(_from: address, _to: address, _value: uint256) -> bool:
         if allowance < max_value(uint256):
             self.allowance[_from][msg.sender] = allowance - _value
 
-        rewards.report(asset, _from, _to, _value, 0)
+        rewards.report(ygauge, _from, _to, _value, 0)
 
     log Transfer(_from, _to, _value)
     return True
@@ -333,8 +334,9 @@ def _deposit(_assets: uint256, _receiver: address):
     """
     assert _assets > 0
     pending: uint256 = self._pending()
-    rewards.report(asset, empty(address), _receiver, _assets, pending)
-    assert ERC20(asset).transferFrom(msg.sender, proxy, _assets, default_return_value=True)
+    rewards.report(ygauge, empty(address), _receiver, _assets, pending)
+    assert ERC20(asset).transferFrom(msg.sender, self, _assets, default_return_value=True)
+    ERC4626(ygauge).deposit(_assets, proxy)
     log Deposit(msg.sender, _receiver, _assets, _assets)
     log Transfer(empty(address), _receiver, _assets)
 
@@ -352,8 +354,8 @@ def _withdraw(_assets: uint256, _receiver: address, _owner: address):
         if allowance < max_value(uint256):
             self.allowance[_owner][msg.sender] = allowance - _assets
     pending: uint256 = self._pending()
-    rewards.report(asset, _owner, empty(address), _assets, pending)
-    assert ERC20(asset).transferFrom(proxy, _receiver, _assets, default_return_value=True)
+    rewards.report(ygauge, _owner, empty(address), _assets, pending)
+    ERC4626(ygauge).withdraw(_assets, _receiver, proxy)
     log Withdraw(msg.sender, _receiver, _owner, _assets, _assets)
     log Transfer(_owner, empty(address), _assets)
 
@@ -362,5 +364,5 @@ def _pending() -> uint256:
     """
     @notice Claim rewards from the Yearn gauge and return reward balance
     """
-    YearnGauge(asset).getReward(proxy)
+    YearnGauge(ygauge).getReward(proxy)
     return reward_token.balanceOf(self)

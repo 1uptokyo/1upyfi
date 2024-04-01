@@ -51,7 +51,8 @@ def test_deploy(project, alice, proxy, rewards, ygauge, reward_token, registry, 
     assert ygauge.recipients(proxy) == gauge
     assert ygauge.allowance(proxy, gauge) == MAX_VALUE
 
-    assert gauge.asset() == ygauge
+    assert gauge.asset() == ygauge.asset()
+    assert gauge.ygauge() == ygauge
     assert gauge.proxy() == proxy
     assert gauge.reward_token() == reward_token
     assert gauge.rewards() == rewards
