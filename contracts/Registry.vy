@@ -17,7 +17,7 @@ interface Registry:
 implements: Registry
 
 interface Gauge:
-    def asset() -> address: view
+    def ygauge() -> address: view
 
 interface Proxy:
     def call(_target: address, _data: Bytes[68]): nonpayable
@@ -92,7 +92,7 @@ def gauge_registered(_gauge: address) -> bool:
     @param _gauge Gauge address
     @return True: gauge is registered, False: gauge is not registered
     """
-    ygauge: address = Gauge(_gauge).asset()
+    ygauge: address = Gauge(_gauge).ygauge()
     return self.gauge_map[ygauge] == _gauge
 
 @external
@@ -116,7 +116,7 @@ def register(_gauge: address) -> uint256:
     @dev The underlying Yearn gauge cannot already be in the registry
     """
     assert msg.sender == self.registrar
-    ygauge: address = Gauge(_gauge).asset()
+    ygauge: address = Gauge(_gauge).ygauge()
     assert ygauge != empty(address)
     assert self.gauge_map[ygauge] == empty(address)
 
@@ -146,7 +146,7 @@ def deregister(_gauge: address, _idx: uint256):
     @dev Can only be called by management
     """
     assert msg.sender == self.management
-    ygauge: address = Gauge(_gauge).asset()
+    ygauge: address = Gauge(_gauge).ygauge()
     assert self.gauge_map[ygauge] == _gauge
     assert self.ygauges[_idx] == ygauge
 

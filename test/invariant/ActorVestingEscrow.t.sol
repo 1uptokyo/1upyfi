@@ -41,9 +41,9 @@ contract ActorVestingEscrowTest is BaseTest, FoundryRandom {
             uint256 _amount = randomNumber(1, type(uint64).max / TOTAL_HANDLERS);
             uint256 _vestingDuration = randomNumber(1, type(uint32).max);
             address _recipient = address(uint160(randomNumber(1, type(uint160).max)));
-            uint256 _cliffLength = randomNumber(1, _vestingDuration - 1);// TODO 0
-            uint256 _vestingStart = randomNumber(block.timestamp, block.timestamp + 2 + type(uint32).max - _vestingDuration);// TODO block.timestamp +1;
-            bool _openClaim = randomNumber(0, 100) < 50; // TODO CHECK VALUES!!!!
+            uint256 _cliffLength = randomNumber(1, _vestingDuration - 1);
+            uint256 _vestingStart = randomNumber(block.timestamp, block.timestamp + 2 + type(uint32).max - _vestingDuration);
+            bool _openClaim = randomNumber(0, 100) < 50;
 
             _token.mint(sender, _amount);
             vm.startPrank(sender);
