@@ -90,7 +90,7 @@ def create_vest(
     cliff_length: uint256 = 0
 ) -> uint256:
     """
-    @notice Create a new vest
+    @notice Create a new YFI vest
     @dev Prior to deployment you must approve `amount` YFI
     @param recipient Address to vest tokens for
     @param amount Amount of tokens being vested for `recipient`
@@ -103,6 +103,7 @@ def create_vest(
     assert vesting_start + vesting_duration > block.timestamp  # dev: just use a transfer, dummy
     assert vesting_duration > 0  # dev: duration must be > 0
     assert recipient not in [self, empty(address), YFI.address, OWNER] # dev: wrong recipient
+    assert amount > 0
 
     idx: uint256 = self.num_vests
     self.num_vests = idx + 1
@@ -134,6 +135,15 @@ def deploy_vesting_contract(
     amount: uint256,
     open_claim: bool = True,
 ) -> (address, uint256):
+    """
+    @notice Deposit into a liquid locker and deploy a vesting contract
+    @dev Requires a vest. Requires the liquid locker being approved by the owner
+    @param idx Vest index
+    @param token Liquid locker token to deposit into
+    @param amount Amount of YFI to deposit
+    @param open_claim Whether anyone can claim 
+    @return Vest contract address, vested amount of liquid locker tokens
+    """
     vest: Vest = self.pending_vests[idx]
     assert msg.sender == vest.recipient
 

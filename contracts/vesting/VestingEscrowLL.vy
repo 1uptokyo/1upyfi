@@ -271,7 +271,7 @@ def isValidSignature(_hash: bytes32, _signature: Bytes[128]) -> bytes4:
     @param _signature Signature, unused
     @return EIP-1271 magic value
     """
-    assert self.messages[_hash]
+    assert self.messages[_hash] and len(_signature) == 0
     return EIP1271_MAGIC_VALUE
 
 
