@@ -18,6 +18,7 @@ implements: ERC4626
 interface ERC20Detailed:
     def name() -> String[124]: view
     def symbol() -> String[60]: view
+    def decimals() -> uint8: view
 
 interface YearnGauge:
     def getReward(_account: address): nonpayable
@@ -32,7 +33,6 @@ ygauge: public(immutable(address))
 proxy: public(immutable(address))
 reward_token: public(immutable(ERC20))
 rewards: public(immutable(Rewards))
-decimals: public(constant(uint8)) = 18
 allowance: public(HashMap[address, HashMap[address, uint256]])
 
 event Transfer:
@@ -99,6 +99,16 @@ def symbol() -> String[64]:
     """
     symbol: String[60] = ERC20Detailed(asset).symbol()
     return concat(PREFIX, "-", symbol)
+
+@external
+@view
+def decimals() -> uint8:
+    """
+    @notice Get the gauge decimals
+    @return Gauge decimals
+    @dev Same as the decimals of the asset inside the Yearn gauge
+    """
+    return ERC20Detailed(asset).decimals()
 
 @external
 @view
