@@ -17,7 +17,8 @@ implements: ERC4626
 
 interface ERC20Detailed:
     def name() -> String[124]: view
-    def symbol() -> String[60]: view
+    def symbol() -> String[61]: view
+    def decimals() -> uint8: view
 
 interface YearnGauge:
     def getReward(_account: address): nonpayable
@@ -32,7 +33,6 @@ ygauge: public(immutable(address))
 proxy: public(immutable(address))
 reward_token: public(immutable(ERC20))
 rewards: public(immutable(Rewards))
-decimals: public(constant(uint8)) = 18
 allowance: public(HashMap[address, HashMap[address, uint256]])
 
 event Transfer:
@@ -57,8 +57,6 @@ event Withdraw:
     owner: indexed(address)
     assets: uint256
     shares: uint256
-
-PREFIX: constant(String[3]) = "1up"
 
 @external
 def __init__(_ygauge: address, _proxy: address, _reward_token: address, _rewards: address):
@@ -87,7 +85,7 @@ def name() -> String[128]:
     @dev Based on the name of the asset inside the Yearn gauge
     """
     name: String[124] = ERC20Detailed(asset).name()
-    return concat(PREFIX, " ", name)
+    return concat("1UP ", name)
 
 @external
 @view
@@ -97,8 +95,18 @@ def symbol() -> String[64]:
     @return Gauge symbol
     @dev Based on the name of the asset inside the Yearn gauge
     """
-    symbol: String[60] = ERC20Detailed(asset).symbol()
-    return concat(PREFIX, "-", symbol)
+    symbol: String[61] = ERC20Detailed(asset).symbol()
+    return concat("up-", symbol)
+
+@external
+@view
+def decimals() -> uint8:
+    """
+    @notice Get the gauge decimals
+    @return Gauge decimals
+    @dev Same as the decimals of the asset inside the Yearn gauge
+    """
+    return ERC20Detailed(asset).decimals()
 
 @external
 @view
