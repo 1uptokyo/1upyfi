@@ -55,7 +55,7 @@ initialized: public(bool)
 
 owner: public(address)
 
-# 1UP specific state
+# Liquid locker specific state
 operators: public(HashMap[address, bool])
 messages: public(HashMap[bytes32, bool])
 
@@ -253,6 +253,7 @@ def set_operator(_operator: address, _flag: bool):
     @param _operator Operator
     @param _flag True: operator, False: not operator
     @dev Can only be called by recipient
+    @dev Requires prior approval by factory owner
     """
     assert msg.sender == self.recipient
     assert _operator != empty(address)
