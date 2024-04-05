@@ -32,9 +32,14 @@ def redeemer(
     redeemer.set_curve_pool(curve_pool, sender=deployer)
     return redeemer
 
-def test_redeem_discount_eth(accounts, alice, bob, liquid_locker, rewards, discount_token, yearn_redemption, redeemer):
+@fixture
+def mint(chain, accounts, discount_token, rewards):
+    owner = accounts[discount_token.owner()]
+    chain.set_balance(owner, UNIT)
+    discount_token.mint(rewards, UNIT, sender=owner)
+
+def test_redeem_discount_eth(alice, bob, liquid_locker, rewards, discount_token, yearn_redemption, redeemer, mint):
     # redeem with ETH
-    discount_token.mint(rewards, UNIT, sender=accounts[discount_token.owner()])
     discount_token.approve(redeemer, UNIT, sender=rewards)
     value = yearn_redemption.eth_required(UNIT)
 
@@ -48,9 +53,8 @@ def test_redeem_discount_eth(accounts, alice, bob, liquid_locker, rewards, disco
     assert liquid_locker.balanceOf(bob) == SCALE
     assert redeemer.balance > 0
 
-def test_redeem_discount_eth_slippage(accounts, alice, bob, liquid_locker, rewards, discount_token, yearn_redemption, redeemer):
+def test_redeem_discount_eth_slippage(alice, bob, liquid_locker, rewards, discount_token, yearn_redemption, redeemer, mint):
     # redeem with an excessive amount of ETH, it should send the excess to the receiver
-    discount_token.mint(rewards, UNIT, sender=accounts[discount_token.owner()])
     discount_token.approve(redeemer, UNIT, sender=rewards)
     value = yearn_redemption.eth_required(UNIT) + UNIT
 
@@ -66,9 +70,8 @@ def test_redeem_discount_eth_slippage(accounts, alice, bob, liquid_locker, rewar
     assert redeemer.balance > 0
     assert bob.balance - pre_bal >= UNIT
 
-def test_redeem_discount_eth_lt(accounts, alice, bob, ychad, locking_token, liquid_locker, rewards, discount_token, yearn_redemption, redeemer):
+def test_redeem_discount_eth_lt(alice, bob, ychad, locking_token, liquid_locker, rewards, discount_token, yearn_redemption, redeemer, mint):
     # redeem with ETH, with locking token rewards
-    discount_token.mint(rewards, UNIT, sender=accounts[discount_token.owner()])
     discount_token.approve(redeemer, UNIT, sender=rewards)
     value = yearn_redemption.eth_required(UNIT)
     locking_token.transfer(rewards, 2 * UNIT, sender=ychad)
@@ -86,9 +89,8 @@ def test_redeem_discount_eth_lt(accounts, alice, bob, ychad, locking_token, liqu
     assert liquid_locker.balanceOf(bob) == 3 * SCALE
     assert redeemer.balance > 0
 
-def test_redeem_discount_sell(accounts, alice, bob, liquid_locker, rewards, discount_token, curve_pool, redeemer):
+def test_redeem_discount_sell(alice, bob, liquid_locker, rewards, discount_token, curve_pool, redeemer, mint):
     # redeem without ETH (sell rewards)
-    discount_token.mint(rewards, UNIT, sender=accounts[discount_token.owner()])
     discount_token.approve(redeemer, UNIT, sender=rewards)
     data = encode(['uint256'], [2 * UNIT // 10]) # sell 0.2 discount token
     before = discount_token.balanceOf(curve_pool)
@@ -104,9 +106,8 @@ def test_redeem_discount_sell(accounts, alice, bob, liquid_locker, rewards, disc
     assert liquid_locker.balanceOf(bob) == 8 * SCALE // 10
     assert redeemer.balance > 0
 
-def test_redeem_discount_sell_lt(accounts, alice, bob, ychad, locking_token, liquid_locker, rewards, discount_token, curve_pool, redeemer):
+def test_redeem_discount_sell_lt(alice, bob, ychad, locking_token, liquid_locker, rewards, discount_token, curve_pool, redeemer, mint):
     # redeem without ETH (sell rewards), with locking token rewards
-    discount_token.mint(rewards, UNIT, sender=accounts[discount_token.owner()])
     discount_token.approve(redeemer, UNIT, sender=rewards)
     locking_token.transfer(rewards, 2 * UNIT, sender=ychad)
     locking_token.approve(redeemer, 2 * UNIT, sender=rewards)
@@ -126,10 +127,9 @@ def test_redeem_discount_sell_lt(accounts, alice, bob, ychad, locking_token, liq
     assert liquid_locker.balanceOf(bob) == 28 * SCALE // 10
     assert redeemer.balance > 0
 
-def test_claim_excess(accounts, deployer, alice, bob, rewards, discount_token, yearn_redemption, redeemer):
+def test_claim_excess(deployer, alice, bob, rewards, discount_token, yearn_redemption, redeemer, mint):
     # excess is sent to treasury
     redeemer.set_treasury(alice, sender=deployer)
-    discount_token.mint(rewards, UNIT, sender=accounts[discount_token.owner()])
     discount_token.approve(redeemer, UNIT, sender=rewards)
     value = yearn_redemption.eth_required(UNIT)
     redeemer.redeem(alice, bob, 0, UNIT, b"", value=value, sender=rewards)

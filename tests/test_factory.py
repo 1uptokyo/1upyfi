@@ -56,8 +56,8 @@ def test_deploy(project, alice, proxy, rewards, ygauge, reward_token, registry, 
     assert gauge.proxy() == proxy
     assert gauge.reward_token() == reward_token
     assert gauge.rewards() == rewards
-    assert gauge.name() == '1up Curve YFI-ETH Pool yVault'
-    assert gauge.symbol() == '1up-yvCurve-YFIETH'
+    assert gauge.name() == '1UP Curve YFI-ETH Pool yVault'
+    assert gauge.symbol() == 'up-yvCurve-YFIETH'
 
 def test_deploy_again(alice, ygauge, factory):
     # cant deploy a gauge for the same ygauge again
