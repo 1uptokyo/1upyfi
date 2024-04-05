@@ -4,7 +4,7 @@
 @title Vesting Escrow for veYFI liquid lockers
 @author Curve Finance, Yearn Finance
 @license MIT
-@notice Vests ERC20 tokens for a single address
+@notice Vests veYFI liquid locker tokens for a single address
 @dev Intended to be deployed many times via `VotingEscrowFactory`
 """
 
