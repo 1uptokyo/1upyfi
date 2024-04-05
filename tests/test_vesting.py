@@ -108,6 +108,34 @@ def test_deploy_vesting_contract_invalid(ychad, alice, locking_token, staking, f
     with reverts():
         factory.deploy_vesting_contract(0, staking, UNIT, sender=alice)
 
+def test_revoke_full_vest(ychad, deployer, alice, bob, locking_token, factory):
+    # yfi can be clawed back
+    locking_token.approve(factory, 4 * UNIT, sender=ychad)
+    factory.create_vest(alice, 4 * UNIT, 5 * DAY, sender=ychad)
+    factory.revoke(0, bob, sender=deployer)
+    assert factory.pending_vests(0).amount == 0
+    assert locking_token.balanceOf(bob) == 4 * UNIT
+
+def test_revoke_pending_vest(ychad, deployer, alice, bob, locking_token, staking, factory, depositor):
+    # remaining yfi that is not deposited into a liquid locker yet can be clawed back
+    locking_token.approve(factory, 10 * UNIT, sender=ychad)
+    factory.create_vest(alice, 4 * UNIT, 5 * DAY, sender=ychad)
+    factory.create_vest(bob, 6 * UNIT, 5 * DAY, sender=ychad)
+    factory.set_liquid_locker(staking, depositor, sender=deployer)
+    factory.deploy_vesting_contract(0, staking, UNIT, False, sender=alice)
+    factory.revoke(0, sender=deployer)
+    assert factory.pending_vests(0).amount == 0
+    assert factory.pending_vests(1).amount == 6 * UNIT
+    assert locking_token.balanceOf(factory) == 6 * UNIT
+    assert locking_token.balanceOf(deployer) == 3 * UNIT
+
+def test_revoke_vest_permission(ychad, alice, locking_token, factory):
+    # only factory owner can claw back
+    locking_token.approve(factory, 4 * UNIT, sender=ychad)
+    factory.create_vest(alice, 4 * UNIT, 5 * DAY, sender=ychad)
+    with reverts():
+        factory.revoke(0, sender=alice)
+
 def test_set_liquid_locker(deployer, factory):
     # liquid lockers can be approved by setting a deposit contract
     ll = '0x1111111111111111111111111111111111111111'

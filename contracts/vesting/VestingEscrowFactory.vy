@@ -56,6 +56,10 @@ event VestingContractDeployed:
     yfi_amount: uint256
     token_amount: uint256
 
+event Revoke:
+    index: indexed(uint256)
+    beneficiary: address
+
 event LiquidLockerSet:
     liquid_locker: indexed(address)
     depositor: address
@@ -180,6 +184,22 @@ def deploy_vesting_contract(
         ll_amount,
     )
     return escrow, ll_amount
+
+@external
+def revoke(idx: uint256, beneficiary: address = msg.sender):
+    """
+    @notice Disable further flow of tokens for a specific vest and 
+        clawback the unvested tokens to `beneficiary`
+    @param idx Vest index
+    @param beneficiary Recipient of unvested tokens
+    """
+    assert msg.sender == OWNER
+
+    amount: uint256 = self.pending_vests[idx].amount
+    assert amount > 0
+    self.pending_vests[idx].amount = 0
+    assert YFI.transfer(beneficiary, amount, default_return_value=True)
+    log Revoke(idx, beneficiary)
 
 @external
 def set_liquid_locker(liquid_locker: address, depositor: address):
