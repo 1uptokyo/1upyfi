@@ -24,7 +24,7 @@ operators: public(HashMap[address, HashMap[address, bool]]) # liquid locker toke
 interface Depositor:
     def deposit(_amount: uint256) -> uint256: nonpayable
 
-interface VestingEscrowSimple:
+interface VestingEscrowLL:
     def initialize(
         owner: address,
         token: address,
@@ -71,9 +71,9 @@ OWNER: public(immutable(address))
 def __init__(target: address, yfi: address, owner: address):
     """
     @notice Contract constructor
-    @dev Prior to deployment you must deploy one copy of `VestingEscrowSimple` which
+    @dev Prior to deployment you must deploy one copy of `VestingEscrowLL` which
          is used as a library for vesting contracts deployed by this factory
-    @param target `VestingEscrowSimple` contract address
+    @param target `VestingEscrowLL` contract address
     @param yfi YFI token address
     @param owner The owner of the factory that can add/remove liquid lockers and their operators
     """
@@ -157,7 +157,7 @@ def deploy_vesting_contract(
     assert ll_amount > 0
 
     escrow: address = create_minimal_proxy_to(TARGET)
-    VestingEscrowSimple(escrow).initialize(
+    VestingEscrowLL(escrow).initialize(
         OWNER,
         token,
         msg.sender,
