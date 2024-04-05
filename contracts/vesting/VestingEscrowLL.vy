@@ -254,6 +254,8 @@ def set_operator(_operator: address, _flag: bool):
     @param _flag True: operator, False: not operator
     @dev Can only be called by recipient
     @dev Requires prior approval by factory owner
+    @dev Prior to adding new operators their functionality should be closely reviewed, as a
+        malicious operator could allow tokens to be transferred out of the vesting contract
     """
     assert msg.sender == self.recipient
     assert _operator != empty(address)

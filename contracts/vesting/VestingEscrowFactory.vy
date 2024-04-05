@@ -221,6 +221,9 @@ def set_operator(liquid_locker: address, operator: address, flag: bool):
     @notice Approve a operator for usage by vest recipients of a specific liquid locker.
         Once an operator is approved, recipients have the choice whether or not to add the
         operator to their vesting contract
+    @dev Prior to adding new operators their functionality should be closely reviewed, as a
+        malicious operator could allow tokens to be transferred out of the vesting contract and 
+        completely bypass the vesting period
     @param liquid_locker Liquid locker token address
     @param operator Operator address
     @param flag True: approve operator, False: retract operator approval
