@@ -19,6 +19,14 @@ interface Vesting:
 staking: public(immutable(address))
 rewards: public(immutable(address))
 
+event Lock:
+    vesting: indexed(Vesting)
+    duration: uint256
+
+event Claim:
+    vesting: indexed(Vesting)
+    receiver: address
+
 @external
 def __init__(_staking: address, _rewards: address):
     """
@@ -40,6 +48,7 @@ def lock(_vesting: Vesting, _duration: uint256 = max_value(uint256)):
     assert msg.sender == _vesting.recipient()
     data: Bytes[36] = _abi_encode(_duration, method_id=method_id("lock(uint256)"))
     _vesting.call(staking, data)
+    log Lock(_vesting, _duration)
 
 @external
 @payable
@@ -53,3 +62,4 @@ def claim(_vesting: Vesting, _receiver: address = msg.sender, _redeem_data: Byte
     assert msg.sender == _vesting.recipient()
     data: Bytes[356] = _abi_encode(_receiver, _redeem_data, method_id=method_id("claim(address,bytes)"))
     _vesting.call(rewards, data, value=msg.value)
+    log Claim(_vesting, _receiver)
