@@ -4,7 +4,10 @@
 @title Vesting Escrow Factory
 @author Curve Finance, Yearn Finance
 @license MIT
-@notice Stores YFI and distributes veYFI liquid locker tokens by deploying `VestingEscrowLL` contracts
+@notice
+    Stores YFI and distributes veYFI liquid locker tokens by deploying `VestingEscrowLL` contracts.
+    The factory owner can approve liquid lockers for usage in vests, and approve specific
+    operators to call functions through the vesting contract on its behalf.
 """
 
 from vyper.interfaces import ERC20
@@ -180,6 +183,13 @@ def deploy_vesting_contract(
 
 @external
 def set_liquid_locker(liquid_locker: address, depositor: address):
+    """
+    @notice Approve a liquid locker for usage by vest recipients
+    @param liquid_locker Liquid locker token address
+    @param depositor Contract address implementing the `Depositor` interface,
+        which deposits into the specific liquid locker token and sends the tokens
+        back to the factory
+    """
     assert msg.sender == OWNER
     assert liquid_locker != empty(address) and liquid_locker != YFI.address
     self.liquid_lockers[liquid_locker] = depositor
@@ -187,6 +197,14 @@ def set_liquid_locker(liquid_locker: address, depositor: address):
 
 @external
 def set_operator(liquid_locker: address, operator: address, flag: bool):
+    """
+    @notice Approve a operator for usage by vest recipients of a specific liquid locker.
+        Once an operator is approved, recipients have the choice whether or not to add the
+        operator to their vesting contract
+    @param liquid_locker Liquid locker token address
+    @param operator Operator address
+    @param flag True: approve operator, False: retract operator approval
+    """
     assert msg.sender == OWNER
     assert liquid_locker != empty(address) and operator != empty(address)
     self.operators[liquid_locker][operator] = flag
