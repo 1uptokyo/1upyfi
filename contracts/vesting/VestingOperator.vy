@@ -18,6 +18,8 @@ interface Vesting:
 
 staking: public(immutable(address))
 rewards: public(immutable(address))
+delegate_registry: public(immutable(address))
+delegation_space: public(immutable(bytes32))
 
 event Lock:
     vesting: indexed(Vesting)
@@ -28,14 +30,33 @@ event Claim:
     receiver: address
 
 @external
-def __init__(_staking: address, _rewards: address):
+def __init__(_staking: address, _rewards: address, _delegate_registry: address, _delegation_space: bytes32):
     """
     @notice Constructor
     @param _staking supYFI address
     @param _rewards Staking rewards contract address
+    @param _delegate_registry Snapshot delegate registry
+    @param _delegation_space Snapshot delegation space
     """
     staking = _staking
     rewards = _rewards
+    delegate_registry = _delegate_registry
+    delegation_space = _delegation_space
+
+@external
+def set_snapshot_delegate(_vesting: Vesting, _delegate: address):
+    """
+    @notice Delegate vesting supYFI Snapshot voting weight
+    @param _vesting Vesting contract address
+    @param _delegate Address to delegate voting weight to
+    """
+    assert msg.sender == _vesting.recipient()
+    data: Bytes[68] = b""
+    if _delegate == empty(address):
+        data = _abi_encode(delegation_space, method_id=method_id("clearDelegate(bytes32)"))
+    else:
+        data = _abi_encode(delegation_space, _delegate, method_id=method_id("setDelegate(bytes32,address)"))
+    _vesting.call(delegate_registry, data)
 
 @external
 def lock(_vesting: Vesting, _duration: uint256 = max_value(uint256)):

@@ -1,4 +1,5 @@
 from ape import reverts
+from ape import Contract
 from pytest import fixture
 from _constants import *
 
@@ -34,8 +35,16 @@ def depositor(project, deployer, locking_token, liquid_locker, staking):
     return project.VestingEscrowDepositor.deploy(locking_token, liquid_locker, staking, deployer, sender=deployer)
 
 @fixture
-def operator(project, deployer, staking, rewards):
-    return project.VestingOperator.deploy(staking, rewards, sender=deployer)
+def delegate_registry():
+    return Contract('0x469788fE6E9E9681C6ebF3bF78e7Fd26Fc015446')
+
+@fixture
+def delegation_space():
+    return bytes('1uptokyo.eth', 'utf-8')
+
+@fixture
+def operator(project, deployer, staking, rewards, delegate_registry, delegation_space):
+    return project.VestingOperator.deploy(staking, rewards, delegate_registry, delegation_space, sender=deployer)
 
 def test_create_vest(chain, ychad, alice, locking_token, factory):
     # anyone can create a yfi vest
@@ -250,6 +259,44 @@ def test_unsign(ychad, deployer, alice, locking_token, staking, factory, deposit
     with reverts():
         vesting.isValidSignature(MESSAGE, b'')
     
+def test_set_snapshot_delegate(ychad, deployer, alice, bob, locking_token, staking, factory, depositor, operator, delegate_registry, delegation_space):
+    # snapshot voting weight can be delegated
+    locking_token.approve(factory, 3 * UNIT, sender=ychad)
+    factory.create_vest(alice, 3 * UNIT, 5 * DAY, sender=ychad)
+    factory.set_liquid_locker(staking, depositor, sender=deployer)
+    vesting, _ = factory.deploy_vesting_contract(0, staking, UNIT, False, sender=alice).return_value
+    vesting = project.VestingEscrowLL.at(vesting)
+    factory.set_operator(staking, operator, True, sender=deployer)
+    vesting.set_operator(operator, True, sender=alice)
+    assert delegate_registry.delegation(vesting, delegation_space) == ZERO_ADDRESS
+    operator.set_snapshot_delegate(vesting, bob, sender=alice)
+    assert delegate_registry.delegation(vesting, delegation_space) == bob
+
+def test_set_snapshot_delegate_permission(ychad, deployer, alice, bob, locking_token, staking, factory, depositor, operator):
+    # only recipient can delegate voting weight
+    locking_token.approve(factory, 3 * UNIT, sender=ychad)
+    factory.create_vest(alice, 3 * UNIT, 5 * DAY, sender=ychad)
+    factory.set_liquid_locker(staking, depositor, sender=deployer)
+    vesting, _ = factory.deploy_vesting_contract(0, staking, UNIT, False, sender=alice).return_value
+    vesting = project.VestingEscrowLL.at(vesting)
+    factory.set_operator(staking, operator, True, sender=deployer)
+    vesting.set_operator(operator, True, sender=alice)
+    with reverts():
+        operator.set_snapshot_delegate(vesting, bob, sender=deployer)
+
+def test_unset_snapshot_delegate(ychad, deployer, alice, bob, locking_token, staking, factory, depositor, operator, delegate_registry, delegation_space):
+    # snapshot voting weight can be undelegated
+    locking_token.approve(factory, 3 * UNIT, sender=ychad)
+    factory.create_vest(alice, 3 * UNIT, 5 * DAY, sender=ychad)
+    factory.set_liquid_locker(staking, depositor, sender=deployer)
+    vesting, _ = factory.deploy_vesting_contract(0, staking, UNIT, False, sender=alice).return_value
+    vesting = project.VestingEscrowLL.at(vesting)
+    factory.set_operator(staking, operator, True, sender=deployer)
+    vesting.set_operator(operator, True, sender=alice)
+    operator.set_snapshot_delegate(vesting, bob, sender=alice)
+    assert delegate_registry.delegation(vesting, delegation_space) == bob
+    operator.set_snapshot_delegate(vesting, ZERO_ADDRESS, sender=alice)
+    assert delegate_registry.delegation(vesting, delegation_space) == ZERO_ADDRESS
 
 def test_lock(chain, ychad, deployer, alice, locking_token, staking, factory, depositor, operator):
     # stake can be locked by calling the operator
