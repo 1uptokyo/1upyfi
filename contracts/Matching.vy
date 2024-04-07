@@ -4,7 +4,7 @@
 @author 1up
 @license GNU AGPLv3
 @notice
-    Matches locked YFI at a predefinied rate.
+    Matches locked YFI at a predefined rate.
     Anyone can transfer YFI into this contract.
     Recipient can claim the matched amount as supYFI.
     Owner can clawback any unmatched tokens.
