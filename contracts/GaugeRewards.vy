@@ -281,7 +281,7 @@ def pending_fees() -> uint256:
 
 @external
 @view
-def fee_rate(_idx: uint256) -> uint256:
+def fee_rates(_idx: uint256) -> uint256:
     """
     @notice Get the fee rate of a specific type
     @param _idx Fee type

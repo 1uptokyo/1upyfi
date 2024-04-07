@@ -321,10 +321,10 @@ def test_set_fee_rate(deployer, rewards):
     # fee rates are stored properly
     v = 1_000
     for i in range(4):
-        assert rewards.fee_rate(i) == 0
+        assert rewards.fee_rates(i) == 0
         rewards.set_fee_rate(i, v + i, sender=deployer)
     for i in range(4):
-        assert rewards.fee_rate(i) == v + i
+        assert rewards.fee_rates(i) == v + i
 
 def test_set_fee_rate_max(deployer, rewards):
     # cant set fee of more than 100%
@@ -355,7 +355,7 @@ def test_pending_fees(deployer, alice, token, rewards, ygauge, gauge):
     rewards.claim([gauge], sender=alice)
     assert rewards.pending_fees() == 3 * UNIT
     for i in range(4):
-        rewards.fee_rate(i) == 2_500 + i - FEE_IDX
+        rewards.fee_rates(i) == 2_500 + i - FEE_IDX
 
 def test_claim_fees(deployer, alice, bob, token, rewards, ygauge, gauge):
     # claimed fees are sent to treasury
