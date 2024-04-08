@@ -1,6 +1,6 @@
 # @version 0.3.10
 """
-@title Proxy
+@title Basic redeemer
 @author 1up
 @license GNU AGPLv3
 @notice

@@ -5,7 +5,7 @@
 @license GNU AGPLv3
 @notice
     Tracks rewards for stakers.
-    Gauges report changes in balances to this contract.
+    Staking contract report changes in balances to this contract.
     Assumes that any amount of locking token and discount token in the proxy is a reward for stakers.
     Rewards can be harvested by anyone in exchange for a share of the rewards.
     Users can claim their rewards as:

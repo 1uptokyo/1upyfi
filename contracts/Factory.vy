@@ -1,6 +1,6 @@
 # @version 0.3.10
 """
-@title Gauge registry
+@title Gauge factory
 @author 1up
 @license GNU AGPLv3
 @notice
