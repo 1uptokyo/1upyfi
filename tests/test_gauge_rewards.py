@@ -206,14 +206,14 @@ def test_harvest(deployer, alice, bob, token, rewards, ygauge, gauge):
 
 def test_harvest_fee(deployer, alice, bob, token, rewards, ygauge, gauge):
     # harvest gauge rewards with harvest fee
-    rewards.set_fee_rate(HARVEST_FEE_IDX, 2_500, sender=deployer)
-    rewards.report(ygauge, ZERO_ADDRESS, alice, 2 * UNIT, 0, sender=gauge)
-    token.mint(gauge, 8 * UNIT, sender=deployer)
-    assert rewards.harvest([gauge], [8 * UNIT], bob, sender=alice).return_value == 2 * UNIT
-    assert token.balanceOf(rewards) == 6 * UNIT
-    assert token.balanceOf(bob) == 2 * UNIT
+    rewards.set_fee_rate(HARVEST_FEE_IDX, 1_000, sender=deployer)
+    rewards.report(ygauge, ZERO_ADDRESS, alice, 3 * UNIT, 0, sender=gauge)
+    token.mint(gauge, 10 * UNIT, sender=deployer)
+    assert rewards.harvest([gauge], [10 * UNIT], bob, sender=alice).return_value == UNIT
+    assert token.balanceOf(rewards) == 9 * UNIT
+    assert token.balanceOf(bob) == UNIT
     assert rewards.packed_supply(gauge) >> 128 == 3 * UNIT
-    assert rewards.claimable(gauge, alice) == 6 * UNIT
+    assert rewards.claimable(gauge, alice) == 9 * UNIT
 
 def test_harvest_excess(deployer, alice, token, rewards, ygauge, gauge):
     # cant harvest more than balance
@@ -327,9 +327,17 @@ def test_set_fee_rate(deployer, rewards):
         assert rewards.fee_rates(i) == v + i
 
 def test_set_fee_rate_max(deployer, rewards):
-    # cant set fee of more than 100%
+    # cant set fee of more than 50%
+    for i in range(1, 4):
+        with reverts():
+            rewards.set_fee_rate(i, 5_001, sender=deployer)
+        rewards.set_fee_rate(i, 5_000, sender=deployer)
+
+def test_set_harvest_fee_rate_max(deployer, rewards):
+    # cant set harvest fee of more than 10%
     with reverts():
-        rewards.set_fee_rate(0, 10_001, sender=deployer)
+        rewards.set_fee_rate(HARVEST_FEE_IDX, 1_001, sender=deployer)
+    rewards.set_fee_rate(HARVEST_FEE_IDX, 1_000, sender=deployer)
 
 def test_set_fee_rate_invalid_index(deployer, rewards):
     # cant set fee for invalid index
@@ -344,18 +352,18 @@ def test_set_fee_rate_permission(alice, rewards):
 def test_pending_fees(deployer, alice, token, rewards, ygauge, gauge):
     # fees add up properly and dont write the other fields
     for i in range(4):
-        # make our lives easier, set naked claim fee to 25%
-        rewards.set_fee_rate(i, 2_500 + i - FEE_IDX, sender=deployer)
+        # make our lives easier, set naked claim fee to 10%
+        rewards.set_fee_rate(i, 1_000 + i - FEE_IDX, sender=deployer)
     rewards.report(ygauge, ZERO_ADDRESS, alice, UNIT, 0, sender=gauge)
     token.mint(gauge, 4 * UNIT, sender=deployer)
     rewards.report(ygauge, ZERO_ADDRESS, ZERO_ADDRESS, 0, 4 * UNIT, sender=gauge)
     rewards.claim([gauge], sender=alice)
-    token.mint(gauge, 8 * UNIT, sender=deployer)
-    rewards.report(ygauge, ZERO_ADDRESS, ZERO_ADDRESS, 0, 8 * UNIT, sender=gauge)
+    token.mint(gauge, 6 * UNIT, sender=deployer)
+    rewards.report(ygauge, ZERO_ADDRESS, ZERO_ADDRESS, 0, 6 * UNIT, sender=gauge)
     rewards.claim([gauge], sender=alice)
-    assert rewards.pending_fees() == 3 * UNIT
+    assert rewards.pending_fees() == UNIT
     for i in range(4):
-        rewards.fee_rates(i) == 2_500 + i - FEE_IDX
+        rewards.fee_rates(i) == 1_000 + i - FEE_IDX
 
 def test_claim_fees(deployer, alice, bob, token, rewards, ygauge, gauge):
     # claimed fees are sent to treasury

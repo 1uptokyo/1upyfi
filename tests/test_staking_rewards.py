@@ -183,18 +183,18 @@ def test_harvest_no_supply(deployer, locking_token, discount_token, proxy, rewar
 
 def test_harvest_fee(deployer, alice, bob, locking_token, discount_token, proxy, staking, rewards):
     # fees are transfered to the harvester
-    rewards.set_fee_rate(HARVEST_FEE_IDX, 2_500, sender=deployer)
+    rewards.set_fee_rate(HARVEST_FEE_IDX, 1_000, sender=deployer)
     staking.mint(alice, UNIT, sender=deployer)
-    locking_token.mint(proxy, 4 * UNIT, sender=deployer)
-    discount_token.mint(proxy, 8 * UNIT, sender=deployer)
-    rewards.harvest(4 * UNIT, 8 * UNIT, bob, sender=alice)
-    assert locking_token.balanceOf(rewards) == 3 * UNIT
-    assert locking_token.balanceOf(bob) == UNIT
-    assert discount_token.balanceOf(rewards) == 6 * UNIT
-    assert discount_token.balanceOf(bob) == 2 * UNIT
+    locking_token.mint(proxy, 20 * UNIT, sender=deployer)
+    discount_token.mint(proxy, 30 * UNIT, sender=deployer)
+    rewards.harvest(20 * UNIT, 30 * UNIT, bob, sender=alice)
+    assert locking_token.balanceOf(rewards) == 18 * UNIT
+    assert locking_token.balanceOf(bob) == 2 * UNIT
+    assert discount_token.balanceOf(rewards) == 27 * UNIT
+    assert discount_token.balanceOf(bob) == 3 * UNIT
     next = rewards.packed_next()
-    assert next & MASK == 3 * UNIT
-    assert next >> 128 == 6 * UNIT
+    assert next & MASK == 18 * UNIT
+    assert next >> 128 == 27 * UNIT
 
 def test_claim_naked(chain, deployer, alice, bob, locking_token, discount_token, proxy, staking, rewards):
     # claim naked reward tokens
@@ -246,9 +246,9 @@ def test_claim_redeem_sell_fee(chain, deployer, alice, bob, locking_token, disco
     locking_token.mint(proxy, 4 * UNIT, sender=deployer)
     discount_token.mint(proxy, 6 * UNIT, sender=deployer)
     rewards.harvest(4 * UNIT, 6 * UNIT, sender=deployer)
-    rewards.set_fee_rate(LT_FEE_IDX, 10_000, sender=deployer)
+    rewards.set_fee_rate(LT_FEE_IDX, 1_234, sender=deployer)
     rewards.set_fee_rate(LT_DEPOSIT_FEE_IDX, 2_500, sender=deployer)
-    rewards.set_fee_rate(DT_FEE_IDX, 10_000, sender=deployer)
+    rewards.set_fee_rate(DT_FEE_IDX, 1_234, sender=deployer)
     rewards.set_fee_rate(DT_REDEEM_SELL_FEE_IDX, 5_000, sender=deployer)
     chain.pending_timestamp += 2 * WEEK
     staking.burn(alice, 2 * UNIT, sender=deployer)
@@ -278,10 +278,10 @@ def test_claim_redeem_eth_fee(chain, deployer, alice, bob, locking_token, discou
     locking_token.mint(proxy, 4 * UNIT, sender=deployer)
     discount_token.mint(proxy, 6 * UNIT, sender=deployer)
     rewards.harvest(4 * UNIT, 6 * UNIT, sender=deployer)
-    rewards.set_fee_rate(LT_FEE_IDX, 10_000, sender=deployer)
+    rewards.set_fee_rate(LT_FEE_IDX, 1_234, sender=deployer)
     rewards.set_fee_rate(LT_DEPOSIT_FEE_IDX, 2_500, sender=deployer)
-    rewards.set_fee_rate(DT_FEE_IDX, 10_000, sender=deployer)
-    rewards.set_fee_rate(DT_REDEEM_SELL_FEE_IDX, 10_000, sender=deployer)
+    rewards.set_fee_rate(DT_FEE_IDX, 1_234, sender=deployer)
+    rewards.set_fee_rate(DT_REDEEM_SELL_FEE_IDX, 1_234, sender=deployer)
     rewards.set_fee_rate(DT_REDEEM_FEE_IDX, 5_000, sender=deployer)
     chain.pending_timestamp += 2 * WEEK
     staking.burn(alice, 2 * UNIT, sender=deployer)
@@ -349,9 +349,17 @@ def test_set_fee_rate(deployer, rewards):
         assert rewards.fee_rates(i) == 1_000 * i
 
 def test_set_fee_rate_max(deployer, rewards):
-    # cant set fee of more than 100%
+    # cant set fee of more than 50%
+    for i in range(1, 6):
+        with reverts():
+            rewards.set_fee_rate(i, 5_001, sender=deployer)
+        rewards.set_fee_rate(i, 5_000, sender=deployer)
+
+def test_set_harvest_fee_rate_max(deployer, rewards):
+    # cant set harvest fee of more than 10%
     with reverts():
-        rewards.set_fee_rate(0, 10_001, sender=deployer)
+        rewards.set_fee_rate(HARVEST_FEE_IDX, 1_001, sender=deployer)
+    rewards.set_fee_rate(HARVEST_FEE_IDX, 1_000, sender=deployer)
 
 def test_set_fee_rate_invalid_index(deployer, rewards):
     # cant set fee for invalid index

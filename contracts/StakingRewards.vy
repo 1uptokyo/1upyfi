@@ -366,7 +366,10 @@ def set_fee_rate(_idx: uint256, _fee: uint256):
     """
     assert msg.sender == self.management
     assert _idx < 6
-    assert _fee <= FEE_DENOMINATOR
+    if _idx == HARVEST_FEE_IDX:
+        assert _fee <= FEE_DENOMINATOR / 10
+    else:
+        assert _fee <= FEE_DENOMINATOR / 2
     self.fee_rates[_idx] = _fee
     log SetFeeRate(_idx, _fee)
 

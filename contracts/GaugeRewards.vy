@@ -344,7 +344,10 @@ def set_fee_rate(_idx: uint256, _fee: uint256):
     """
     assert msg.sender == self.management
     assert _idx < 4
-    assert _fee <= FEE_DENOMINATOR
+    if _idx == HARVEST_FEE_IDX:
+        assert _fee <= FEE_DENOMINATOR / 10
+    else:
+        assert _fee <= FEE_DENOMINATOR / 2
     packed: uint256 = self.packed_fees
     sh: uint256 = 32 * (4 + _idx)
     packed &= ~(FEE_MASK << sh) # zero out old fee
