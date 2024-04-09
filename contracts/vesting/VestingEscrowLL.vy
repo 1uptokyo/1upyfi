@@ -1,15 +1,18 @@
 # @version 0.3.10
 
 """
-@title Simple Vesting Escrow
+@title Vesting Escrow for veYFI liquid lockers
 @author Curve Finance, Yearn Finance
 @license MIT
-@notice Vests ERC20 tokens for a single address
+@notice Vests veYFI liquid locker tokens for a single address
 @dev Intended to be deployed many times via `VotingEscrowFactory`
 """
 
 from vyper.interfaces import ERC20
 
+
+interface Factory:
+    def operators(_token: address, _operator: address) -> bool: view
 
 event Claim:
     recipient: indexed(address)
@@ -30,7 +33,15 @@ event Disowned:
 event SetOpenClaim:
     state: bool
 
+event SetSignedMessage:
+    hash: indexed(bytes32)
+    signed: bool
 
+event SetOperator:
+    operator: indexed(address)
+    flag: bool
+
+factory: public(Factory)
 recipient: public(address)
 token: public(ERC20)
 start_time: public(uint256)
@@ -44,6 +55,11 @@ initialized: public(bool)
 
 owner: public(address)
 
+# Liquid locker specific state
+operators: public(HashMap[address, bool])
+messages: public(HashMap[bytes32, bool])
+
+EIP1271_MAGIC_VALUE: constant(bytes4) = 0x1626ba7e
 
 @external
 def __init__():
@@ -78,7 +94,7 @@ def initialize(
     """
     assert not self.initialized  # dev: can only initialize once
     self.initialized = True
-
+    self.factory = Factory(msg.sender)
     self.token = token
     self.owner = owner
     self.start_time = start_time
@@ -212,3 +228,64 @@ def collect_dust(token: ERC20, beneficiary: address = msg.sender):
         amount = amount + self.total_claimed - self._total_vested_at(self.disabled_at)
 
     assert token.transfer(beneficiary, amount, default_return_value=True)
+
+
+# Liquid locker specific functions
+
+@external
+def set_signed_message(_hash: bytes32, _signed: bool):
+    """
+    @notice Mark a message as signed
+    @param _hash Message hash
+    @param _signed True: signed, False; not signed
+    @dev Can only be called by operators
+    """
+    assert msg.sender == self.recipient
+    assert _hash != empty(bytes32)
+    self.messages[_hash] = _signed
+    log SetSignedMessage(_hash, _signed)
+
+
+@external
+def set_operator(_operator: address, _flag: bool):
+    """
+    @notice Add or remove an operator
+    @param _operator Operator
+    @param _flag True: operator, False: not operator
+    @dev Can only be called by recipient
+    @dev Requires prior approval by factory owner
+    @dev Prior to adding new operators their functionality should be closely reviewed, as a
+        malicious operator could allow tokens to be transferred out of the vesting contract
+    """
+    assert msg.sender == self.recipient
+    assert _operator != empty(address)
+    if _flag:
+        assert self.factory.operators(self.token.address, _operator)
+    self.operators[_operator] = _flag
+    log SetOperator(_operator, _flag)
+
+
+@external
+@view
+def isValidSignature(_hash: bytes32, _signature: Bytes[128]) -> bytes4:
+    """
+    @notice Check whether a message should be considered as signed
+    @param _hash Hash of message
+    @param _signature Signature, unused
+    @return EIP-1271 magic value
+    """
+    assert self.messages[_hash] and len(_signature) == 0
+    return EIP1271_MAGIC_VALUE
+
+
+@external
+@payable
+def call(_target: address, _data: Bytes[2048]):
+    """
+    @notice Call another contract through the escrow contract
+    @param _target Contract to call
+    @param _data Calldata
+    @dev Can only be called by operators
+    """
+    assert self.operators[msg.sender]
+    raw_call(_target, _data, value=msg.value)
