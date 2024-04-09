@@ -153,7 +153,7 @@ abstract contract BaseTest is Test {
     ) internal returns (IVestingEscrow) {
         vm.startPrank(_deployer);
         IVestingEscrow _instance = IVestingEscrow(
-            deployer.deployContract("contracts/vesting/", "VestingEscrowSimple")
+            deployer.deployContract("contracts/vesting/", "VestingEscrowLL")
         );
         vm.stopPrank();
         return IVestingEscrow(_instance);
