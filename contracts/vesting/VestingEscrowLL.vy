@@ -41,6 +41,10 @@ event SetOperator:
     operator: indexed(address)
     flag: bool
 
+event Call:
+    operator: address
+    target: address
+
 factory: public(Factory)
 recipient: public(address)
 token: public(ERC20)
@@ -285,7 +289,12 @@ def call(_target: address, _data: Bytes[2048]):
     @notice Call another contract through the escrow contract
     @param _target Contract to call
     @param _data Calldata
-    @dev Can only be called by operators
+    @dev Can only be called by operators or vest recipient
     """
-    assert self.operators[msg.sender]
+    if msg.sender == self.recipient:
+        assert _target != self.token.address
+    else:
+        assert self.operators[msg.sender]
+
     raw_call(_target, _data, value=msg.value)
+    log Call(msg.sender, _target)
