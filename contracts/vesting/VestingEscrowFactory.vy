@@ -1,13 +1,15 @@
 # @version 0.3.10
 
 """
-@title Vesting Escrow Factory
+@title Liquid Locker Vesting Escrow Factory
 @author Curve Finance, Yearn Finance
 @license MIT
 @notice
     Stores YFI and distributes veYFI liquid locker tokens by deploying `VestingEscrowLL` contracts.
     The factory owner can approve liquid lockers for usage in vests, and approve specific
     operators to call functions through the vesting contract on its behalf.
+    Anyone can create a vest by depositing YFI. The vest recipient chooses which liquid locker 
+    to deposit their vest into.
 """
 
 from vyper.interfaces import ERC20

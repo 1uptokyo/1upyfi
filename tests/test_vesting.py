@@ -224,6 +224,58 @@ def test_remove_operator(ychad, deployer, alice, locking_token, staking, factory
     vesting.set_operator(operator, False, sender=alice)
     assert not vesting.operators(operator)
 
+def test_call(ychad, deployer, alice, bob, locking_token, staking, factory, depositor):
+    # operators can call through the vesting contract
+    locking_token.approve(factory, 3 * UNIT, sender=ychad)
+    factory.create_vest(alice, 3 * UNIT, 5 * DAY, sender=ychad)
+    factory.set_liquid_locker(staking, depositor, sender=deployer)
+    vesting, _ = factory.deploy_vesting_contract(0, staking, UNIT, False, sender=alice).return_value
+    vesting = project.VestingEscrowLL.at(vesting)
+    factory.set_operator(staking, bob, True, sender=deployer)
+    vesting.set_operator(bob, True, sender=alice)
+    token = project.MockToken.deploy(sender=deployer)
+    token.mint(vesting, UNIT, sender=deployer)
+    data = token.transfer.encode_input(alice, UNIT)
+    vesting.call(token, data, sender=bob)
+    assert token.balanceOf(alice) == UNIT
+
+def test_call_permission(ychad, deployer, alice, bob, locking_token, staking, factory, depositor):
+    # only operators can call through the vesting contract
+    locking_token.approve(factory, 3 * UNIT, sender=ychad)
+    factory.create_vest(alice, 3 * UNIT, 5 * DAY, sender=ychad)
+    factory.set_liquid_locker(staking, depositor, sender=deployer)
+    vesting, _ = factory.deploy_vesting_contract(0, staking, UNIT, False, sender=alice).return_value
+    vesting = project.VestingEscrowLL.at(vesting)
+    token = project.MockToken.deploy(sender=deployer)
+    token.mint(vesting, UNIT, sender=deployer)
+    data = token.transfer.encode_input(alice, UNIT)
+    with reverts():
+        vesting.call(token, data, sender=bob)
+
+def test_call_recipient(ychad, deployer, alice, locking_token, staking, factory, depositor):
+    # recipient can call through the vesting contract
+    locking_token.approve(factory, 3 * UNIT, sender=ychad)
+    factory.create_vest(alice, 3 * UNIT, 5 * DAY, sender=ychad)
+    factory.set_liquid_locker(staking, depositor, sender=deployer)
+    vesting, _ = factory.deploy_vesting_contract(0, staking, UNIT, False, sender=alice).return_value
+    vesting = project.VestingEscrowLL.at(vesting)
+    token = project.MockToken.deploy(sender=deployer)
+    token.mint(vesting, UNIT, sender=deployer)
+    data = token.transfer.encode_input(alice, UNIT)
+    vesting.call(token, data, sender=alice)
+    assert token.balanceOf(alice) == UNIT
+
+def test_call_recipient_token(ychad, deployer, alice, locking_token, staking, factory, depositor):
+    # recipient cant call functions on the vesting token
+    locking_token.approve(factory, 3 * UNIT, sender=ychad)
+    factory.create_vest(alice, 3 * UNIT, 5 * DAY, sender=ychad)
+    factory.set_liquid_locker(staking, depositor, sender=deployer)
+    vesting, _ = factory.deploy_vesting_contract(0, staking, UNIT, False, sender=alice).return_value
+    vesting = project.VestingEscrowLL.at(vesting)
+    data = staking.transfer.encode_input(alice, UNIT)
+    with reverts():
+        vesting.call(staking, data, sender=alice)
+
 def test_sign(ychad, deployer, alice, locking_token, staking, factory, depositor):
     # recipient can sign messages
     locking_token.approve(factory, 3 * UNIT, sender=ychad)
