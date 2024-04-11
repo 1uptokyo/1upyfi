@@ -5,12 +5,15 @@ import {Test, console2} from "forge-std/Test.sol";
 import {VyperDeployer} from "./VyperDeployer.sol";
 import {IVestingEscrowFactory} from "./IVestingEscrowFactory.sol";
 import {IVestingEscrow} from "./IVestingEscrow.sol";
+import {IVestingEscrowDepositor} from "./IVestingEscrowDepositor.sol";
+import {IStakingRewards} from "./IStakingRewards.sol";
 import {ILiquidLocker} from "./ILiquidLocker.sol";
 import {IVeYFI} from "./IVeYFI.sol";
 import {IProxy} from "./IProxy.sol";
 import {IDYFIRewardPool} from "./IDYFIRewardPool.sol";
 import {IMockToken} from "../mocks/IMockToken.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 
 abstract contract BaseTest is Test {
     address public constant GOV = address(0xBEEF);
@@ -30,24 +33,66 @@ abstract contract BaseTest is Test {
         return IMockToken(_instance);
     }
 
-    function _deployVestingEscrowFactory(address _deployer) internal returns (IVestingEscrowFactory) {
+    function _deployVestingEscrowFactory(address _deployer, address yfi, address owner) internal returns (IVestingEscrowFactory) {
         IVestingEscrow _target = _deployVestingEscrowTarget(_deployer);
-        IVestingEscrowFactory _escrowFactory = _deployVestingEscrowFactory(_deployer, address(_target));
+        IVestingEscrowFactory _escrowFactory = _deployVestingEscrowFactory(_deployer, address(_target), yfi, owner);
         return _escrowFactory;
     }
 
     function _deployVestingEscrowFactory(
         address _deployer,
-        address _target
+        address _target,
+        address yfi,
+        address owner
     ) internal returns (IVestingEscrowFactory) {
         vm.startPrank(_deployer);
         address _instance = deployer.deployContract(
             "contracts/vesting/",
             "VestingEscrowFactory",
-            abi.encode(_target)
+            abi.encode(_target, yfi, owner)
         );
         vm.stopPrank();
         return IVestingEscrowFactory(_instance);
+    }
+
+    function _deployVestingEscrowDepositor(
+        address _deployer,
+        address yfi,
+        address llToken,
+        address staking,
+        address owner
+    ) internal returns (IVestingEscrowDepositor) {
+        vm.startPrank(_deployer);
+        address _instance = deployer.deployContract(
+            "contracts/vesting/",
+            "VestingEscrowDepositor",
+            abi.encode(yfi, llToken, staking, owner)
+        );
+        vm.stopPrank();
+        vm.label(_instance, "escrowDepositor");
+        return IVestingEscrowDepositor(_instance);
+    }
+
+    function _deployStakingAndRewards(
+        address _deployer,
+        ILiquidLocker _liquidLocker,
+        IProxy _proxy,
+        IERC20 _lockingToken,
+        IERC20 _discountToken
+    ) internal returns (IERC4626 staking, IStakingRewards rewards) {
+        vm.startPrank(_deployer);
+        address _staking = deployer.deployContract(
+            "contracts/",
+            "Staking",
+            abi.encode(address(_liquidLocker))
+        );
+        address _rewards = deployer.deployContract(
+            "contracts/",
+            "StakingRewards",
+            abi.encode(address(_proxy), address(_staking), address(_lockingToken), address(_discountToken))
+        );
+        vm.stopPrank();
+        return (IERC4626(_staking), IStakingRewards(_rewards));
     }
 
     function _deployVeYFI(address _deployer, address token) internal returns (address) {
@@ -55,6 +100,7 @@ abstract contract BaseTest is Test {
 
         vm.startPrank(_deployer);
         address veYFI = deployer.deployContract("test/mocks/", "veYFI", abi.encode(token, rewardPool));
+        vm.label(veYFI, "veYFI");
         vm.stopPrank();
         return veYFI;
     }
@@ -63,6 +109,7 @@ abstract contract BaseTest is Test {
 
         vm.startPrank(_deployer);
         address proxy = deployer.deployContract("contracts/", "Proxy", abi.encode(_veToken));
+        vm.label(proxy, "proxy");
         vm.stopPrank();
         return IProxy(proxy);
     }
@@ -70,7 +117,7 @@ abstract contract BaseTest is Test {
     function deployYFIRewardPool(address _deployer, address veYFI, uint256 startTime) internal returns (address) {
         vm.startPrank(_deployer);
         address rewardPool = deployer.deployContract("test/mocks/", "YFIRewardPool", abi.encode(veYFI, startTime));
-
+        vm.label(rewardPool, "yfiRewardPool");
         IVeYFI(veYFI).setRewardPool(rewardPool);
         vm.stopPrank();
         return rewardPool;
@@ -88,6 +135,7 @@ abstract contract BaseTest is Test {
             "dYFIRewardPool",
             abi.encode(veYFI, dYFI, startTime)
         );
+        vm.label(rewardPool, "dYfiRewardPool");
         vm.stopPrank();
         return rewardPool;
     }
@@ -123,8 +171,8 @@ abstract contract BaseTest is Test {
 
     function _deployLiquidLocker(
         address _deployer
-    ) internal returns (ILiquidLocker, IMockToken, IVeYFI, IProxy) {
-        (address token, , address votingEscrow,) = _deployveYFIContext(_deployer);
+    ) internal returns (ILiquidLocker, IMockToken, IVeYFI, IProxy, IERC4626, IStakingRewards) {
+        (address token, address dYFI, address votingEscrow,) = _deployveYFIContext(_deployer);
 
         address _proxy = address(_deployProxy(_deployer, votingEscrow));
 
@@ -140,11 +188,21 @@ abstract contract BaseTest is Test {
         IProxy(_proxy).set_operator(_instance, true);
         vm.stopPrank();
 
+        (IERC4626 staking, IStakingRewards rewards) = _deployStakingAndRewards(
+            _deployer,
+            ILiquidLocker(_instance),
+            IProxy(_proxy),
+            IERC20(token),
+            IERC20(dYFI)
+        );
+
         return (
             ILiquidLocker(_instance),
             IMockToken(token),
             IVeYFI(votingEscrow),
-            IProxy(_proxy)
+            IProxy(_proxy),
+            staking,
+            rewards
         );
     }
 
