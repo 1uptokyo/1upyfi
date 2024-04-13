@@ -70,7 +70,8 @@ def match() -> (uint256, uint256):
     self.matched = matched + match
 
     ll_match: uint256 = liquid_locker.deposit(match)
-    staking.deposit(ll_match, recipient)
+    assert ll_match > 0
+    assert staking.deposit(ll_match, recipient) > 0
 
     return match, ll_match
 
