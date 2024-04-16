@@ -33,6 +33,7 @@ ygauge: public(immutable(address))
 proxy: public(immutable(address))
 reward_token: public(immutable(ERC20))
 rewards: public(immutable(Rewards))
+multiplier: immutable(uint256)
 allowance: public(HashMap[address, HashMap[address, uint256]])
 
 event Transfer:
@@ -72,6 +73,7 @@ def __init__(_ygauge: address, _proxy: address, _reward_token: address, _rewards
     proxy = _proxy
     reward_token = ERC20(_reward_token)
     rewards = Rewards(_rewards)
+    multiplier = 10**(18 - convert(ERC20Detailed(asset).decimals(), uint256))
     assert reward_token.approve(_rewards, max_value(uint256), default_return_value=True)
     assert ERC20(asset).approve(_ygauge, max_value(uint256), default_return_value=True)
     log Transfer(empty(address), msg.sender, 0)
@@ -115,7 +117,7 @@ def totalSupply() -> uint256:
     @notice Get the gauge total supply
     @return Gauge total supply
     """
-    return rewards.gauge_supply(self)
+    return rewards.gauge_supply(self) / multiplier
 
 @external
 @view
@@ -125,7 +127,7 @@ def balanceOf(_account: address) -> uint256:
     @param _account User
     @return Gauge balance
     """
-    return rewards.gauge_balance(self, _account)
+    return rewards.gauge_balance(self, _account) / multiplier
 
 @external
 def transfer(_to: address, _value: uint256) -> bool:
@@ -138,7 +140,7 @@ def transfer(_to: address, _value: uint256) -> bool:
     assert _to != empty(address) and _to != self
 
     if _value > 0:
-        rewards.report(ygauge, msg.sender, _to, _value, 0)
+        rewards.report(ygauge, msg.sender, _to, _value * multiplier, 0)
 
     log Transfer(msg.sender, _to, _value)
     return True
@@ -159,7 +161,7 @@ def transferFrom(_from: address, _to: address, _value: uint256) -> bool:
         if allowance < max_value(uint256):
             self.allowance[_from][msg.sender] = allowance - _value
 
-        rewards.report(ygauge, _from, _to, _value, 0)
+        rewards.report(ygauge, _from, _to, _value * multiplier, 0)
 
     log Transfer(_from, _to, _value)
     return True
@@ -185,7 +187,7 @@ def totalAssets() -> uint256:
     @notice Get the total amount of assets in the vault
     @return Total amount of assets
     """
-    return rewards.gauge_supply(self)
+    return rewards.gauge_supply(self) / multiplier
 
 @view
 @external
@@ -277,7 +279,7 @@ def maxWithdraw(_owner: address) -> uint256:
     @param _owner User withdrawing
     @return Maximum amount of assets that can be withdrawn
     """
-    return rewards.gauge_balance(self, _owner)
+    return rewards.gauge_balance(self, _owner) / multiplier
 
 @view
 @external
@@ -309,7 +311,7 @@ def maxRedeem(_owner: address) -> uint256:
     @param _owner User redeeming
     @return Maximum amount of shares that can be redeemed
     """
-    return rewards.gauge_balance(self, _owner)
+    return rewards.gauge_balance(self, _owner) / multiplier
 
 @view
 @external
@@ -342,7 +344,7 @@ def _deposit(_assets: uint256, _receiver: address):
     """
     assert _assets > 0
     pending: uint256 = self._pending()
-    rewards.report(ygauge, empty(address), _receiver, _assets, pending)
+    rewards.report(ygauge, empty(address), _receiver, _assets * multiplier, pending)
     assert ERC20(asset).transferFrom(msg.sender, self, _assets, default_return_value=True)
     ERC4626(ygauge).deposit(_assets, proxy)
     log Deposit(msg.sender, _receiver, _assets, _assets)
@@ -362,7 +364,7 @@ def _withdraw(_assets: uint256, _receiver: address, _owner: address):
         if allowance < max_value(uint256):
             self.allowance[_owner][msg.sender] = allowance - _assets
     pending: uint256 = self._pending()
-    rewards.report(ygauge, _owner, empty(address), _assets, pending)
+    rewards.report(ygauge, _owner, empty(address), _assets * multiplier, pending)
     ERC4626(ygauge).withdraw(_assets, _receiver, proxy)
     log Withdraw(msg.sender, _receiver, _owner, _assets, _assets)
     log Transfer(_owner, empty(address), _assets)
