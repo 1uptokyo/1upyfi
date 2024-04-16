@@ -246,3 +246,30 @@ def test_approve(alice, bob, gauge):
     assert gauge.allowance(alice, bob) == 0
     gauge.approve(bob, UNIT, sender=alice)
     assert gauge.allowance(alice, bob) == UNIT
+
+def test_lower_decimals(accounts, project, deployer, proxy, reward_token, registry, rewards):
+    # should be able to deposit vaults with lower number of decimals
+    asset = Contract('0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48')
+    whale = accounts['0xD6153F5af5679a75cC85D8974463545181f48772']
+    deployer.transfer(whale, UNIT)
+    yvault = Contract('0xBe53A109B494E5c9f97b9Cd39Fe969BE68BF6204')
+    ygauge = Contract('0x622fA41799406B120f9a40dA843D358b7b2CFEE3')
+
+    gauge = project.Gauge.deploy(ygauge, proxy, reward_token, rewards, sender=deployer)
+    registry.set_gauge_map(ygauge, gauge, sender=deployer)
+    data = ygauge.approve.encode_input(gauge, MAX_VALUE)
+    proxy.call(ygauge, data, sender=deployer)
+
+    amt = 1000 * 10**6
+    asset.approve(yvault, amt, sender=whale)
+    yvault.deposit(amt, whale, sender=whale)
+    yv_amt = yvault.balanceOf(whale)
+    yvault.approve(gauge, yv_amt, sender=whale)
+    gauge.deposit(yv_amt, sender=whale)
+    assert yvault.balanceOf(whale) == 0
+    assert gauge.balanceOf(whale) == yv_amt
+    assert rewards.gauge_balance(gauge, whale) == yv_amt * 10**12
+    gauge.withdraw(yv_amt, sender=whale)
+    assert yvault.balanceOf(whale) == yv_amt
+    assert gauge.balanceOf(whale) == 0
+    assert rewards.gauge_balance(gauge, whale) == 0
