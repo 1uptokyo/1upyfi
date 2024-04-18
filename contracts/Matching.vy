@@ -26,6 +26,7 @@ staking: public(immutable(ERC4626))
 liquid_locker: public(immutable(LiquidLocker))
 proxy: public(immutable(address))
 voting_escrow: public(immutable(YearnVotingEscrow))
+locking_token: public(immutable(ERC20))
 owner: public(immutable(address))
 recipient: public(immutable(address))
 matching_rate: public(immutable(uint256))
@@ -46,11 +47,12 @@ def __init__(_staking: address, _owner: address, _recipient: address, _matching_
     liquid_locker = LiquidLocker(staking.asset())
     proxy = liquid_locker.proxy()
     voting_escrow = YearnVotingEscrow(liquid_locker.voting_escrow())
+    locking_token = ERC20(liquid_locker.token())
     owner = _owner
     recipient = _recipient
     matching_rate = _matching_rate
 
-    assert ERC20(liquid_locker.token()).approve(liquid_locker.address, max_value(uint256), default_return_value=True)
+    assert locking_token.approve(liquid_locker.address, max_value(uint256), default_return_value=True)
     assert ERC20(liquid_locker.address).approve(_staking, max_value(uint256), default_return_value=True)
 
 @external
@@ -66,6 +68,9 @@ def match() -> (uint256, uint256):
     locked: uint256 = voting_escrow.locked(proxy) - matched
     # amount to newly match
     match: uint256 = locked * matching_rate / MATCHING_SCALE - matched
+    available: uint256 = locking_token.balanceOf(self)
+    if available < match:
+        match = available
     assert match > 0
     self.matched = matched + match
 
