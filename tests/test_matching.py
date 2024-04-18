@@ -59,6 +59,20 @@ def test_match_multiple(ychad, alice, locking_token, liquid_locker, staking, mat
     assert staking.balanceOf(alice) == 3 * SCALE
     assert matching.matched() == 3 * UNIT
 
+def test_match_available(ychad, alice, locking_token, liquid_locker, staking, matching):
+    # can only match however many tokens are in the matching contract
+    locking_token.transfer(matching, 3 * UNIT, sender=ychad)
+    locking_token.approve(liquid_locker, 20 * UNIT, sender=ychad)
+    liquid_locker.deposit(8 * UNIT, sender=ychad)
+    assert matching.match(sender=alice).return_value == (2 * UNIT, 2 * SCALE)
+    assert staking.balanceOf(alice) == 2 * SCALE
+    assert matching.matched() == 2 * UNIT
+    liquid_locker.deposit(12 * UNIT, sender=ychad)
+    assert matching.match(sender=alice).return_value == (UNIT, SCALE)
+    assert locking_token.balanceOf(matching) == 0
+    assert staking.balanceOf(alice) == 3 * SCALE
+    assert matching.matched() == 3 * UNIT
+
 def test_match_permission(ychad, bob, locking_token, liquid_locker, matching):
     # only recipient can claim matched tokens
     locking_token.transfer(matching, 3 * UNIT, sender=ychad)
