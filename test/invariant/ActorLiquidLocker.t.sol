@@ -6,9 +6,11 @@ import {StdCheats} from "forge-std/StdCheats.sol";
 import {StdUtils} from "forge-std/StdUtils.sol";
 import {console2 as console} from "forge-std/console2.sol";
 import {BaseTest} from "../utils/Base.t.sol";
+import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 
 import {IVeYFI} from "../utils/IVeYFI.sol";
 import {IProxy} from "../utils/IProxy.sol";
+import {IStakingRewards} from "../utils/IStakingRewards.sol";
 import {ILiquidLocker} from "../utils/ILiquidLocker.sol";
 import {IMockToken} from "../mocks/IMockToken.sol";
 import {LiquidLockerHandler} from "./handlers/LiquidLockerHandler.sol";
@@ -25,6 +27,8 @@ contract ActorLiquidLockerTest is BaseTest {
     IVeYFI internal _veYfi;
     IProxy internal _proxy;
     ILiquidLocker internal _liquidLocker;
+    IERC4626 internal _staking;
+    IStakingRewards internal _stakingRewards;
     LiquidLockerActorManager public manager;
     LiquidLockerHandler[] public handlers;
 
@@ -32,7 +36,7 @@ contract ActorLiquidLockerTest is BaseTest {
         _owner = address(0x99999999);
         _sender = address(0x1);
 
-        (_liquidLocker, _token, _veYfi, _proxy) = _deployLiquidLocker(_owner);
+        (_liquidLocker, _token, _veYfi, _proxy, _staking, _stakingRewards) = _deployLiquidLocker(_owner);
         _token = IMockToken(_liquidLocker.token());
 
         vm.label(_owner, "owner");

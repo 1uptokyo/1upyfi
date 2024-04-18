@@ -10,6 +10,9 @@ import {BaseTest} from "../utils/Base.t.sol";
 
 import {IMockToken} from "../mocks/IMockToken.sol";
 import {IVestingEscrow} from "../utils/IVestingEscrow.sol";
+import {ILiquidLocker} from "../utils/ILiquidLocker.sol";
+import {IProxy} from "../utils/IProxy.sol";
+import {IVeYFI} from "../utils/IVeYFI.sol";
 import {IVestingEscrowDepositor} from "../utils/IVestingEscrowDepositor.sol";
 import {IVestingEscrowFactory} from "../utils/IVestingEscrowFactory.sol";
 import {VestingEscrowHandler} from "./handlers/VestingEscrowHandler.sol";
@@ -20,50 +23,75 @@ contract ActorVestingEscrowTest is BaseTest, FoundryRandom {
     uint256 private constant TOTAL_HANDLERS = 10;
     uint256 private constant MAX_SKIP_SECONDS = 10 * 86400;
 
-    address private owner;
-    address private sender;
+    address internal _owner;
+    address internal _sender;
     IMockToken internal _token;
-    IMockToken internal _llToken;
-    IERC4626 public staking;
+    ILiquidLocker internal _liquidLocker;
+    IVeYFI internal _veYFI;
+    IProxy internal _proxy;
+    IERC4626 internal _staking;
     IVestingEscrowFactory internal _factory;
     VestingEscrowActorManager public manager;
-    VestingEscrowHandler[] public handlers;
+    VestingEscrowHandler[] internal _handlers;
 
     function setUp() external {
-        owner = address(0x99999999);
-        sender = address(0x1);
+        _owner = address(0x99999999);
+        _sender = address(0x1);
+        _token = _deployToken(_owner);
 
-        _token = _deployToken(owner);
-        _llToken = _deployToken(owner);
-        _factory = _deployVestingEscrowFactory(owner, address(_token), owner);
+        IVestingEscrow _target = _deployVestingEscrowTarget(_owner);
 
-        vm.label(owner, "owner");
-        vm.label(sender, "sender");
+        (
+            _liquidLocker,
+            _token, /* yfi */
+            _veYFI,
+            _proxy,
+            _staking,
+            // stakingRewards
+        ) = _deployLiquidLocker(
+            _owner
+        );
+
+        _factory = _deployVestingEscrowFactory(_owner, address(_target), address(_token), _owner);
+
+        vm.label(_owner, "owner");
+        vm.label(_sender, "sender");
         vm.label(address(_factory), "escrowFactory");
         vm.label(address(_token), "token");
-        
-        staking = _deployStakingMock(owner);
+        vm.label(address(_target), "target");
+        vm.label(address(_liquidLocker), "liquidLocker");
+        vm.label(address(_staking), "staking");
+        vm.label(address(_proxy), "proxy");
+
         IVestingEscrowDepositor _depositor = _deployVestingEscrowDepositor(
-            owner,
+            _owner,
             address(_token),
-            address(_llToken),
-            address(staking),
-            owner
+            address(_liquidLocker),
+            address(_staking),
+            _owner
         );
-        vm.startPrank(owner);
-        _factory.set_liquid_locker(address(_llToken), address(_depositor));
+        vm.startPrank(_owner);
+        _factory.set_liquid_locker(address(_liquidLocker), address(_depositor));
+        vm.stopPrank();
+
+        vm.startPrank(address(_liquidLocker));
+        _proxy.call(address(_token), abi.encodeWithSelector(_token.approve.selector, address(_veYFI), type(uint256).max));
+        vm.stopPrank();
+
+        vm.startPrank(address(_depositor));
+        _token.approve(address(_liquidLocker), type(uint256).max);
         vm.stopPrank();
 
         for (uint256 i = 0; i < TOTAL_HANDLERS; ++i) {
-            uint256 _amount = randomNumber(1, type(uint64).max / TOTAL_HANDLERS);
+            uint256 _amount = randomNumber(1e18, type(uint64).max / TOTAL_HANDLERS);
             uint256 _vestingDuration = randomNumber(1, type(uint32).max);
             address _recipient = address(uint160(randomNumber(1, type(uint160).max)));
             uint256 _cliffLength = randomNumber(1, _vestingDuration - 1);
             uint256 _vestingStart = randomNumber(block.timestamp, block.timestamp + 2 + type(uint32).max - _vestingDuration);
             bool _openClaim = randomNumber(0, 100) < 50;
 
-            _token.mint(sender, _amount);
-            vm.startPrank(sender);
+            _token.mint(_sender, _amount);
+            vm.startPrank(_sender);
             _token.approve(address(_factory), _amount);
             uint256 vestIdx = _factory.create_vest(
                 _recipient,
@@ -76,24 +104,26 @@ contract ActorVestingEscrowTest is BaseTest, FoundryRandom {
             vm.startPrank(_recipient);
             (address _vestingEscrow, uint256 llTokens) = _factory.deploy_vesting_contract(
                 vestIdx,
-                address(_llToken),
+                address(_liquidLocker),
                 _amount,
                 _openClaim
             );
             vm.stopPrank();
-            vm.label(_vestingEscrow, "vestingEscrow");
+            vm.label(_vestingEscrow, string.concat("vestingEscrow_", vm.toString(vestIdx)));
             VestingEscrowHandler handler = new VestingEscrowHandler(IVestingEscrow(_vestingEscrow), llTokens);
-            handlers.push(handler);
+            vm.label(address(handler), string.concat("handler_", vm.toString(vestIdx)));
+            _handlers.push(handler);
         }
-        manager = new VestingEscrowActorManager(handlers, MAX_SKIP_SECONDS);
+        manager = new VestingEscrowActorManager(_handlers, MAX_SKIP_SECONDS);
+        vm.label(address(manager), "actorManager");
         targetContract(address(manager));
     }
 
     function invariant_vested_eq_sum_unclaimed_claimed_locked() external {
         for (uint256 i = 0; i < TOTAL_HANDLERS; ++i) {
             assertEq(
-                handlers[i].sum_unclaimed_claimed_locked(),
-                handlers[i].vestedAmount(),
+                _handlers[i].sum_unclaimed_claimed_locked(),
+                _handlers[i].vestedAmount(),
                 "Vested amount not eq sum of unclaimed, claimed and locked"
             );
         }

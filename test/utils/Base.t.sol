@@ -7,6 +7,7 @@ import {IVestingEscrowFactory} from "./IVestingEscrowFactory.sol";
 import {IVestingEscrow} from "./IVestingEscrow.sol";
 import {IVestingEscrowDepositor} from "./IVestingEscrowDepositor.sol";
 import {IStakingRewards} from "./IStakingRewards.sol";
+import {IStaking} from "./IStaking.sol";
 import {ILiquidLocker} from "./ILiquidLocker.sol";
 import {IVeYFI} from "./IVeYFI.sol";
 import {IProxy} from "./IProxy.sol";
@@ -92,6 +93,11 @@ abstract contract BaseTest is Test {
             abi.encode(address(_proxy), address(_staking), address(_lockingToken), address(_discountToken))
         );
         vm.stopPrank();
+        vm.startPrank(IStaking(_staking).management());
+        IStaking(_staking).set_rewards(_rewards);
+        vm.stopPrank();
+
+
         return (IERC4626(_staking), IStakingRewards(_rewards));
     }
 

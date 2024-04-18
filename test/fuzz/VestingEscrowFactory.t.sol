@@ -16,7 +16,6 @@ import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 
 contract VestingEscrowFactoryTest is BaseTest {
     IVestingEscrowFactory public escrowFactory;
-    // ILiquidLocker public liquidLocker;
     IVeYFI public veYFI;
     IMockToken public token;
     ILiquidLocker public liquidLocker;
@@ -97,6 +96,9 @@ contract VestingEscrowFactoryTest is BaseTest {
 
         vm.startPrank(address(_depositor));
         liquidLocker.approve(address(_depositor.staking()), type(uint256).max);
+        vm.stopPrank();
+        vm.startPrank(address(_vestCreator));
+        token.approve(address(escrowFactory), _amount);
         vm.stopPrank();
 
         vm.startPrank(_vestCreator);
