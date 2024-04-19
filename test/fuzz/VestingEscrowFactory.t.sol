@@ -5,16 +5,18 @@ import {console2} from "forge-std/Test.sol";
 import {IVestingEscrow} from "../utils/IVestingEscrow.sol";
 import {IVestingEscrowFactory} from "../utils/IVestingEscrowFactory.sol";
 import {IVestingEscrowDepositor} from "../utils/IVestingEscrowDepositor.sol";
+import {FoundryRandom} from "foundry-random/FoundryRandom.sol";
 import {ILiquidLocker} from "../utils/ILiquidLocker.sol";
 import {IStakingRewards} from "../utils/IStakingRewards.sol";
 import {IVeYFI} from "../utils/IVeYFI.sol";
 import {IProxy} from "../utils/IProxy.sol";
 import {IMockToken} from "../mocks/IMockToken.sol";
 import {BaseTest} from "../utils/Base.t.sol";
+import {UintUtils} from "../utils/UintUtils.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 
-contract VestingEscrowFactoryTest is BaseTest {
+contract VestingEscrowFactoryTest is BaseTest, UintUtils, FoundryRandom {
     IVestingEscrowFactory public escrowFactory;
     IVeYFI public veYFI;
     IMockToken public token;
@@ -30,16 +32,19 @@ contract VestingEscrowFactoryTest is BaseTest {
 
         (
             liquidLocker,
-            token, /* yfi */
+            token /* yfi */,
             veYFI,
             proxy,
             staking,
             stakingRewards
-        ) = _deployLiquidLocker(
+        ) = _deployLiquidLocker(owner);
+
+        escrowFactory = _deployVestingEscrowFactory(
+            owner,
+            address(_target),
+            address(token),
             owner
         );
-
-        escrowFactory = _deployVestingEscrowFactory(owner, address(_target), address(token), owner);
 
         vm.label(owner, "owner");
         vm.label(address(escrowFactory), "escrowFactory");
@@ -50,24 +55,39 @@ contract VestingEscrowFactoryTest is BaseTest {
         vm.label(address(proxy), "proxy");
     }
 
+    function _randomAddress(uint256 _id) internal returns (address) {
+        address _address = _uint256ToAddress(_id);
+        bool isAddressOk = _address != address(0x0) &&
+            _address != address(this) &&
+            _address != address(owner);
+        return
+            isAddressOk
+                ? _address
+                : _uint256ToAddress(
+                    randomNumber(type(uint16).max, type(uint160).max)
+                );
+    }
+
     function test_deploy_vesting_contract_valid(
-        address _vestCreator,
-        address _recipient,
-        uint256 _amount,
-        uint256 _vestingDuration,
-        uint256 _vestingStart,
-        uint256 _cliffLength,
+        uint128 _vestingDuration,
         bool _openClaim,
         address _owner
     ) public {
-        vm.assume(_vestCreator != address(0x0) && _vestCreator != address(this) && _vestCreator != address(token) && _vestCreator != owner && _vestCreator != _recipient);
-        vm.assume(_recipient != address(0x0) && _recipient != address(this) && _recipient != address(token) && _recipient != owner);
-        vm.assume(_amount > 1e18);
-        vm.assume(_amount < type(uint64).max);
         vm.assume(_vestingDuration > 0);
-        vm.assume(_cliffLength <= _vestingDuration);
-        vm.assume(_vestingStart <= type(uint256).max - _vestingDuration);
-        vm.assume(_vestingStart > block.timestamp);
+
+        address _recipient = _uint256ToAddress(
+            randomNumber(type(uint16).max, type(uint128).max)
+        );
+        address _vestCreator = _uint256ToAddress(
+            randomNumber(type(uint128).max, type(uint256).max)
+        );
+        vm.assume(_recipient != _vestCreator);
+        uint256 _amount = randomNumber(1e18, type(uint64).max);
+
+        uint256 _cliffLength = randomNumber(0, _vestingDuration);
+
+        uint256 _vestingStart = block.timestamp +
+            randomNumber(0, _vestingDuration);
         vm.assume(_owner != address(0x0));
 
         token.mint(_owner, _amount);
@@ -83,22 +103,18 @@ contract VestingEscrowFactoryTest is BaseTest {
             _owner
         );
         vm.startPrank(owner);
-        escrowFactory.set_liquid_locker(address(liquidLocker), address(_depositor));
+        escrowFactory.set_liquid_locker(address(staking), address(_depositor));
         vm.stopPrank();
 
         vm.startPrank(address(liquidLocker));
-        proxy.call(address(token), abi.encodeWithSelector(token.approve.selector, address(veYFI), type(uint256).max));
-        vm.stopPrank();
-
-        vm.startPrank(address(_depositor));
-        token.approve(address(liquidLocker), type(uint256).max);
-        vm.stopPrank();
-
-        vm.startPrank(address(_depositor));
-        liquidLocker.approve(address(_depositor.staking()), type(uint256).max);
-        vm.stopPrank();
-        vm.startPrank(address(_vestCreator));
-        token.approve(address(escrowFactory), _amount);
+        proxy.call(
+            address(token),
+            abi.encodeWithSelector(
+                token.approve.selector,
+                address(veYFI),
+                type(uint256).max
+            )
+        );
         vm.stopPrank();
 
         vm.startPrank(_vestCreator);
@@ -113,15 +129,19 @@ contract VestingEscrowFactoryTest is BaseTest {
         );
         vm.stopPrank();
         vm.startPrank(_recipient);
-        (address _vestingEscrow, uint256 llTokens) = escrowFactory.deploy_vesting_contract(
-            vestIdx,
-            address(liquidLocker),
-            _amount,
-            _openClaim
-        );
+        (address _vestingEscrow, uint256 llTokens) = escrowFactory
+            .deploy_vesting_contract(
+                vestIdx,
+                address(staking),
+                _amount,
+                _openClaim
+            );
         vm.stopPrank();
 
-        assertTrue(_vestingEscrow != address(0x0), "invalid vesting contract deployed");
+        assertTrue(
+            _vestingEscrow != address(0x0),
+            "invalid vesting contract deployed"
+        );
         assertTrue(llTokens > 0, "invalid tokens locked");
     }
 }

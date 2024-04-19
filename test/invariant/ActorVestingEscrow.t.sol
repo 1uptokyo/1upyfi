@@ -47,21 +47,11 @@ contract ActorVestingEscrowTest is BaseTest, FoundryRandom {
             _veYFI,
             _proxy,
             _staking,
-            // stakingRewards
         ) = _deployLiquidLocker(
             _owner
         );
 
         _factory = _deployVestingEscrowFactory(_owner, address(_target), address(_token), _owner);
-
-        vm.label(_owner, "owner");
-        vm.label(_sender, "sender");
-        vm.label(address(_factory), "escrowFactory");
-        vm.label(address(_token), "token");
-        vm.label(address(_target), "target");
-        vm.label(address(_liquidLocker), "liquidLocker");
-        vm.label(address(_staking), "staking");
-        vm.label(address(_proxy), "proxy");
 
         IVestingEscrowDepositor _depositor = _deployVestingEscrowDepositor(
             _owner,
@@ -71,16 +61,23 @@ contract ActorVestingEscrowTest is BaseTest, FoundryRandom {
             _owner
         );
         vm.startPrank(_owner);
-        _factory.set_liquid_locker(address(_liquidLocker), address(_depositor));
+        _factory.set_liquid_locker(address(_staking), address(_depositor));
         vm.stopPrank();
 
         vm.startPrank(address(_liquidLocker));
         _proxy.call(address(_token), abi.encodeWithSelector(_token.approve.selector, address(_veYFI), type(uint256).max));
         vm.stopPrank();
 
-        vm.startPrank(address(_depositor));
-        _token.approve(address(_liquidLocker), type(uint256).max);
-        vm.stopPrank();
+        vm.label(_owner, "owner");
+        vm.label(_sender, "sender");
+        vm.label(address(_factory), "escrowFactory");
+        vm.label(address(_token), "token");
+        vm.label(address(_target), "target");
+        vm.label(address(_liquidLocker), "liquidLocker");
+        vm.label(address(_staking), "staking");
+        vm.label(address(_proxy), "proxy");
+        vm.label(address(_veYFI), "veYFI");
+        vm.label(address(_depositor), "escrowDepositor");
 
         for (uint256 i = 0; i < TOTAL_HANDLERS; ++i) {
             uint256 _amount = randomNumber(1e18, type(uint64).max / TOTAL_HANDLERS);
@@ -104,7 +101,7 @@ contract ActorVestingEscrowTest is BaseTest, FoundryRandom {
             vm.startPrank(_recipient);
             (address _vestingEscrow, uint256 llTokens) = _factory.deploy_vesting_contract(
                 vestIdx,
-                address(_liquidLocker),
+                address(_staking),
                 _amount,
                 _openClaim
             );
