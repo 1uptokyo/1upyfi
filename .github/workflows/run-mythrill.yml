@@ -64,4 +64,4 @@ jobs:
       - name: Run Mythril
         id: mythril
         run: |
-          myth a ./src/**.sol --solc-json ./mythril.config.json
+          myth a ./contracts/**.vy --solc-json ./mythril.config.json
